@@ -1,0 +1,112 @@
+import type { CardValue, KingsCupRule } from './game-types';
+
+export const KINGS_CUP_RULES: Record<CardValue, KingsCupRule> = {
+  'A': {
+    card: 'A',
+    title: 'Waterfall',
+    titleHu: 'Vízesés',
+    description: 'Everyone drinks! Each person can only stop when the person before them stops.',
+    descriptionHu: 'Mindenki iszik! Csak akkor állhatsz meg, ha az előtted lévő megállt.',
+    sips: 0,
+  },
+  '2': {
+    card: '2',
+    title: 'You',
+    titleHu: 'Te',
+    description: 'Point at someone - they drink 2 sips!',
+    descriptionHu: 'Mutass valakire - ő iszik 2 kortyot!',
+    sips: 2,
+  },
+  '3': {
+    card: '3',
+    title: 'Me',
+    titleHu: 'Én',
+    description: 'You drink 3 sips!',
+    descriptionHu: 'Te iszol 3 kortyot!',
+    sips: 3,
+  },
+  '4': {
+    card: '4',
+    title: 'Floor',
+    titleHu: 'Padló',
+    description: 'Last person to touch the floor drinks 4 sips!',
+    descriptionHu: 'Aki utoljára ér a padlóhoz, iszik 4 kortyot!',
+    sips: 4,
+  },
+  '5': {
+    card: '5',
+    title: 'Guys',
+    titleHu: 'Fiúk',
+    description: 'All guys drink 2 sips!',
+    descriptionHu: 'Minden fiú iszik 2 kortyot!',
+    sips: 2,
+  },
+  '6': {
+    card: '6',
+    title: 'Chicks',
+    titleHu: 'Lányok',
+    description: 'All girls drink 2 sips!',
+    descriptionHu: 'Minden lány iszik 2 kortyot!',
+    sips: 2,
+  },
+  '7': {
+    card: '7',
+    title: 'Heaven',
+    titleHu: 'Ég',
+    description: 'Last person to raise their hand drinks 3 sips!',
+    descriptionHu: 'Aki utoljára emeli fel a kezét, iszik 3 kortyot!',
+    sips: 3,
+  },
+  '8': {
+    card: '8',
+    title: 'Mate',
+    titleHu: 'Haver',
+    description: 'Pick a drinking buddy. You always drink together!',
+    descriptionHu: 'Válassz egy ivótársat - mindig együtt isztok!',
+    sips: 0,
+  },
+  '9': {
+    card: '9',
+    title: 'Rhyme',
+    titleHu: 'Rím',
+    description: 'Say a word. Go around rhyming. First to fail drinks 3 sips!',
+    descriptionHu: 'Mondj egy szót. Körben rímeljetek. Aki hibázik, iszik 3 kortyot!',
+    sips: 3,
+  },
+  '10': {
+    card: '10',
+    title: 'Categories',
+    titleHu: 'Kategória',
+    description: 'Pick a category. Go around naming things. First to fail drinks 3 sips!',
+    descriptionHu: 'Válassz kategóriát. Körben soroljatok fel. Aki hibázik, iszik 3 kortyot!',
+    sips: 3,
+  },
+  'J': {
+    card: 'J',
+    title: 'Rule Maker',
+    titleHu: 'Szabály',
+    description: 'Make a new rule! Anyone who breaks it drinks.',
+    descriptionHu: 'Csinálj új szabályt! Aki megszegi, iszik.',
+    sips: 0,
+  },
+  'Q': {
+    card: 'Q',
+    title: 'Question Master',
+    titleHu: 'Kérdés mester',
+    description: 'You are the Question Master! Anyone who answers your questions drinks.',
+    descriptionHu: 'Te vagy a Kérdés mester! Aki válaszol neked, iszik.',
+    sips: 0,
+  },
+  'K': {
+    card: 'K',
+    title: 'King',
+    titleHu: 'Király',
+    description: 'Pour your drink into the Kings Cup. The 4th King drinks it all!',
+    descriptionHu: 'Tölts a Király poharába. A 4. király megissza az egészet!',
+    sips: 0,
+  },
+};
+
+export function getKingsCupRule(value: CardValue): KingsCupRule {
+  return KINGS_CUP_RULES[value];
+}
