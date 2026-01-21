@@ -71,6 +71,8 @@ export function RideTheBus({ onBack }: RideTheBusProps) {
   const [busCurrentCard, setBusCurrentCard] = useState<Card | null>(null);
   const [busWaitingForGuess, setBusWaitingForGuess] = useState(false);
   const [busTotalSips, setBusTotalSips] = useState(0);
+  const [busIsFlipping, setBusIsFlipping] = useState(false);
+  const [busDrawnCard, setBusDrawnCard] = useState<Card | null>(null);
 
   const currentPlayer = playerStates[currentPlayerIndex];
 

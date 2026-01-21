@@ -11,6 +11,9 @@ import { PartyLobby } from '@/components/party-lobby';
 import { KingsCup } from '@/components/games/kings-cup';
 import { RideTheBus } from '@/components/games/ride-the-bus';
 import { Blackjack } from '@/components/games/blackjack';
+import { Charades } from '@/components/games/charades';
+import { Taboo } from '@/components/games/taboo';
+import { RatingGame } from '@/components/games/rating-game';
 import { createClient } from '@/lib/supabase/client';
 import type { User } from '@supabase/supabase-js';
 
@@ -226,6 +229,18 @@ function GameRouter() {
 
     if (currentGame === 'blackjack') {
       return <Blackjack onBack={handleBack} />;
+    }
+
+    if (currentGame === 'charades') {
+      return <Charades onBack={handleBack} />;
+    }
+
+    if (currentGame === 'taboo') {
+      return <Taboo onBack={handleBack} />;
+    }
+
+    if (currentGame === 'rating-game') {
+      return <RatingGame onBack={handleBack} />;
     }
   }
 

@@ -15,7 +15,7 @@ export interface Player {
   isActive: boolean;
 }
 
-export type GameType = 'kings-cup' | 'ride-the-bus' | 'blackjack';
+export type GameType = 'kings-cup' | 'ride-the-bus' | 'blackjack' | 'charades' | 'taboo' | 'rating-game';
 
 export interface GameState {
   type: GameType;

@@ -33,6 +33,12 @@ export const translations = {
   rideTheBusDesc: { hu: 'Találd ki a kártyákat vagy igyál!', en: 'Guess the cards or drink!' },
   blackjack: { hu: 'Blackjack', en: 'Blackjack' },
   blackjackDesc: { hu: 'Huszonegy ivós verzió', en: 'Twenty-one drinking edition' },
+  charades: { hu: 'Homlok Játék', en: 'Charades' },
+  charadesDesc: { hu: 'Találd ki mit mutatnak a többiek!', en: 'Guess what others are showing!' },
+  taboo: { hu: 'Barlangnyelv', en: 'Cave Language' },
+  tabooDesc: { hu: 'Írd körül csak egyszótagú szavakkal!', en: 'Describe using only one-syllable words!' },
+  ratingGame: { hu: 'Rangsorolós', en: 'Rating Game' },
+  ratingGameDesc: { hu: 'Találd ki a sorrendet!', en: 'Guess the correct order!' },
   
   // Game Rules
   kingsCupRules: { 
@@ -46,6 +52,18 @@ export const translations = {
   blackjackRules: { 
     hu: 'Közelíts 21-hez anélkül, hogy túllépnéd! Vesztesként iszol, győztesként osztod ki a kortyokat.', 
     en: 'Get close to 21 without going over! Losers drink, winners give out sips.' 
+  },
+  charadesRules: {
+    hu: 'Tartsd a telefont a homlokodhoz! A többiek leírják a megjelenő szót, te pedig kitalálod. Helyes válaszért kortyot osztasz, rosszért iszol!',
+    en: 'Hold the phone to your forehead! Others describe the word, you guess. Correct = give sips, wrong = drink!'
+  },
+  tabooRules: {
+    hu: 'Írd körül a szavakat CSAK egyszótagú szavakkal! A nehezebb szavak több pontot érnek. A vesztes issza a különbséget!',
+    en: 'Describe words using ONLY one-syllable words! Harder words = more points. Loser drinks the difference!'
+  },
+  ratingGameRules: {
+    hu: 'Egy játékos kap leírást (pl. "jó WC papír"). A többiek számot kapnak 1-10 és mondanak dolgokat. A tippelő kitalálja a sorrendet!',
+    en: 'One player gets a description. Others get numbers 1-10 and name things. Guesser figures out the order!'
   },
   
   // Kings Cup specific
