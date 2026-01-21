@@ -27,9 +27,9 @@ interface Profile {
 
 type GameInfo = {
   type: GameType;
-  titleKey: 'kingsCup' | 'rideTheBus' | 'blackjack';
-  descKey: 'kingsCupDesc' | 'rideTheBusDesc' | 'blackjackDesc';
-  rulesKey: 'kingsCupRules' | 'rideTheBusRules' | 'blackjackRules';
+  titleKey: 'kingsCup' | 'rideTheBus' | 'blackjack' | 'charades' | 'taboo' | 'ratingGame';
+  descKey: 'kingsCupDesc' | 'rideTheBusDesc' | 'blackjackDesc' | 'charadesDesc' | 'tabooDesc' | 'ratingGameDesc';
+  rulesKey: 'kingsCupRules' | 'rideTheBusRules' | 'blackjackRules' | 'charadesRules' | 'tabooRules' | 'ratingGameRules';
   icon: string;
 };
 
@@ -37,6 +37,9 @@ const GAMES: GameInfo[] = [
   { type: 'kings-cup', titleKey: 'kingsCup', descKey: 'kingsCupDesc', rulesKey: 'kingsCupRules', icon: '/icons/kings-cup.png' },
   { type: 'ride-the-bus', titleKey: 'rideTheBus', descKey: 'rideTheBusDesc', rulesKey: 'rideTheBusRules', icon: '/icons/ride-the-bus.png' },
   { type: 'blackjack', titleKey: 'blackjack', descKey: 'blackjackDesc', rulesKey: 'blackjackRules', icon: '/icons/blackjack.png' },
+  { type: 'charades', titleKey: 'charades', descKey: 'charadesDesc', rulesKey: 'charadesRules', icon: '/icons/charades.jpg' },
+  { type: 'taboo', titleKey: 'taboo', descKey: 'tabooDesc', rulesKey: 'tabooRules', icon: '/icons/barlangnyelv.png' },
+  { type: 'rating-game', titleKey: 'ratingGame', descKey: 'ratingGameDesc', rulesKey: 'ratingGameRules', icon: '/icons/rating-game.jpg' },
 ];
 
 export function HomeScreen({ onStartGame, onGoOnline, onOpenProfile, onLogin, isOnline = false, userId }: HomeScreenProps) {
