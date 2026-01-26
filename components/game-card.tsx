@@ -16,6 +16,9 @@ const gameIcons: Record<GameType, string> = {
   'kings-cup': '/icons/kings-cup.png',
   'ride-the-bus': '/icons/ride-the-bus.png',
   'blackjack': '/icons/blackjack.png',
+  'charades': '/icons/charades.png',
+  'taboo': '/icons/taboo.png',
+  'rating-game': '/icons/rating-game.png',
 };
 
 export function GameCard({ type, title, description, onClick, isSelected }: GameCardProps) {

@@ -2,9 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import { GameProvider, useGame } from '@/lib/game-context';
-import type { GameType } from '@/lib/game-types';
 import { WelcomeScreen } from '@/components/welcome-screen';
-import { HomeScreen } from '@/components/home-screen';
+import { HomeScreenNew } from '@/components/home-screen-new';
+import { GameDetail } from '@/components/game-detail';
 import { AuthForm } from '@/components/auth-form';
 import { ProfileScreen } from '@/components/profile-screen';
 import { PartyLobby } from '@/components/party-lobby';
@@ -15,9 +15,11 @@ import { Charades } from '@/components/games/charades';
 import { Taboo } from '@/components/games/taboo';
 import { RatingGame } from '@/components/games/rating-game';
 import { createClient } from '@/lib/supabase/client';
+import { GameInfo } from '@/lib/game-catalog';
+import type { GameType } from '@/lib/game-types';
 import type { User } from '@supabase/supabase-js';
 
-type AppView = 'welcome' | 'home' | 'auth' | 'profile' | 'party' | 'game';
+type AppView = 'welcome' | 'home' | 'auth' | 'profile' | 'party' | 'game-detail' | 'game';
 
 function GameRouter() {
   const { currentGame, setCurrentGame, setPlayers, language, setLanguage } = useGame();
@@ -27,6 +29,7 @@ function GameRouter() {
   const [isOnlineMode, setIsOnlineMode] = useState(false);
   const [isOnlineGame, setIsOnlineGame] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [selectedGame, setSelectedGame] = useState<GameInfo | null>(null);
   
   const supabase = createClient();
 
@@ -49,7 +52,6 @@ function GameRouter() {
         if (profile?.language) {
           setLanguage(profile.language as 'hu' | 'en');
         }
-        // Ha mar be van jelentkezve, egybol a home-ra iranyitjuk
         setIsOnlineMode(true);
         setView('home');
       }
@@ -90,10 +92,17 @@ function GameRouter() {
     setView('home');
   };
 
-  const handleStartGame = (game: GameType) => {
-    setCurrentGame(game);
-    setIsOnlineGame(false);
-    setView('game');
+  const handleSelectGame = (game: GameInfo) => {
+    setSelectedGame(game);
+    setView('game-detail');
+  };
+
+  const handleStartGame = () => {
+    if (selectedGame) {
+      setCurrentGame(selectedGame.id as GameType);
+      setIsOnlineGame(false);
+      setView('game');
+    }
   };
 
   const handleGoOnline = () => {
@@ -140,10 +149,9 @@ function GameRouter() {
     setCurrentGame(gameType);
     setIsOnlineGame(true);
     
-    // Set players from party members
     const partyPlayers = members.map((m, index) => ({
       id: m.user_id,
-      name: m.profiles?.username || `Player ${index + 1}`,
+      name: m.profiles?.username || `Játékos ${index + 1}`,
       sips: 0,
     }));
     setPlayers(partyPlayers);
@@ -152,9 +160,18 @@ function GameRouter() {
   };
 
   const handleBack = () => {
-    setCurrentGame(null);
-    if (isOnlineGame) {
-      setView('party');
+    if (view === 'game') {
+      setCurrentGame(null);
+      if (isOnlineGame) {
+        setView('party');
+      } else if (selectedGame) {
+        setView('game-detail');
+      } else {
+        setView('home');
+      }
+    } else if (view === 'game-detail') {
+      setSelectedGame(null);
+      setView('home');
     } else {
       setView('home');
     }
@@ -169,7 +186,7 @@ function GameRouter() {
     );
   }
 
-  // Welcome screen - first time users
+  // Welcome screen
   if (view === 'welcome') {
     return (
       <WelcomeScreen
@@ -210,9 +227,20 @@ function GameRouter() {
     return (
       <PartyLobby
         userId={user.id}
-        username={username || user.email?.split('@')[0] || 'Player'}
+        username={username || user.email?.split('@')[0] || 'Játékos'}
         onStartGame={handlePartyStartGame}
         onLeave={handlePartyLeave}
+      />
+    );
+  }
+
+  // Game detail view
+  if (view === 'game-detail' && selectedGame) {
+    return (
+      <GameDetail
+        game={selectedGame}
+        onBack={handleBack}
+        onStartGame={handleStartGame}
       />
     );
   }
@@ -222,37 +250,32 @@ function GameRouter() {
     if (currentGame === 'kings-cup') {
       return <KingsCup onBack={handleBack} />;
     }
-
     if (currentGame === 'ride-the-bus') {
       return <RideTheBus onBack={handleBack} />;
     }
-
     if (currentGame === 'blackjack') {
       return <Blackjack onBack={handleBack} />;
     }
-
     if (currentGame === 'charades') {
       return <Charades onBack={handleBack} />;
     }
-
     if (currentGame === 'taboo') {
       return <Taboo onBack={handleBack} />;
     }
-
     if (currentGame === 'rating-game') {
       return <RatingGame onBack={handleBack} />;
     }
   }
 
-  // Home view
+  // Home view - new design
   return (
-    <HomeScreen
-      onStartGame={handleStartGame}
-      onGoOnline={handleGoOnline}
+    <HomeScreenNew
+      onSelectGame={handleSelectGame}
       onOpenProfile={isOnlineMode ? handleOpenProfile : undefined}
       onLogin={!isOnlineMode ? handleLogin : undefined}
+      onOpenParty={isOnlineMode ? handleGoOnline : undefined}
       isOnline={isOnlineMode}
-      userId={user?.id}
+      user={user}
     />
   );
 }
