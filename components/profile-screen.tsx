@@ -1,422 +1,238 @@
-'use client';
+"use client";
 
-import { useState, useEffect, useRef } from 'react';
-import { createClient } from '@/lib/supabase/client';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
-import type { Language } from '@/lib/game-types';
-import Image from 'next/image';
+import React from "react"
+
+import { useState, useRef, useEffect } from "react";
+import Image from "next/image";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { createClient } from "@/lib/supabase/client";
 import {
   ArrowLeft,
+  Camera,
+  Crown,
   LogOut,
   User,
-  Users,
-  UserPlus,
-  Check,
-  X,
-  Search,
-  Trash2,
   Settings,
-  Camera,
-  MessageCircle,
-  Send
-} from 'lucide-react';
-import { cn } from '@/lib/utils';
+  Star,
+  Check,
+} from "lucide-react";
 
 interface ProfileScreenProps {
   onBack: () => void;
   onLogout: () => void;
-  language: Language;
-  setLanguage: (lang: Language) => void;
+  language: "hu" | "en";
+  setLanguage: (lang: "hu" | "en") => void;
   userId: string;
 }
+
+const t = {
+  hu: {
+    profile: "Profil",
+    username: "Felhasználónév",
+    email: "Email",
+    language: "Nyelv",
+    hungarian: "Magyar",
+    english: "Angol",
+    premium: "Prémium",
+    premiumDesc: "Korlátlan játékok, exkluzív módok, reklámok nélkül",
+    subscribe: "Előfizetés",
+    subscribed: "Aktív előfizetés",
+    validUntil: "Érvényes:",
+    logout: "Kijelentkezés",
+    save: "Mentés",
+    saved: "Mentve!",
+    uploadPhoto: "Fotó feltöltése",
+    monthlyPrice: "990 Ft / hó",
+    yearlyPrice: "9 990 Ft / év",
+    comingSoon: "Hamarosan...",
+    stats: "Statisztikák",
+    gamesPlayed: "Játszott játékok",
+    partiesJoined: "Partik",
+    friendsCount: "Barátok",
+  },
+  en: {
+    profile: "Profile",
+    username: "Username",
+    email: "Email",
+    language: "Language",
+    hungarian: "Hungarian",
+    english: "English",
+    premium: "Premium",
+    premiumDesc: "Unlimited games, exclusive modes, ad-free",
+    subscribe: "Subscribe",
+    subscribed: "Active subscription",
+    validUntil: "Valid until:",
+    logout: "Logout",
+    save: "Save",
+    saved: "Saved!",
+    uploadPhoto: "Upload photo",
+    monthlyPrice: "$4.99 / month",
+    yearlyPrice: "$49.99 / year",
+    comingSoon: "Coming soon...",
+    stats: "Statistics",
+    gamesPlayed: "Games played",
+    partiesJoined: "Parties",
+    friendsCount: "Friends",
+  },
+};
 
 interface Profile {
   id: string;
   username: string;
-  avatar_url?: string;
+  avatar_url: string | null;
+  language: string;
+  is_premium: boolean;
+  premium_until: string | null;
 }
 
-interface Friendship {
-  id: string;
-  user_id: string;
-  friend_id: string;
-  status: 'pending' | 'accepted';
-  profiles?: Profile;
-}
-
-interface Message {
-  id: string;
-  sender_id: string;
-  receiver_id: string;
-  message: string;
-  created_at: string;
-  sender?: Profile;
-}
-
-export function ProfileScreen({ onBack, onLogout, language, setLanguage, userId }: ProfileScreenProps) {
-  const [view, setView] = useState<'profile' | 'friends' | 'add-friend' | 'messages' | 'chat'>('profile');
-  const [username, setUsername] = useState('');
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [friends, setFriends] = useState<Friendship[]>([]);
-  const [pendingRequests, setPendingRequests] = useState<Friendship[]>([]);
-  const [searchResults, setSearchResults] = useState<Profile[]>([]);
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [selectedFriend, setSelectedFriend] = useState<Profile | null>(null);
-  const [chatMessages, setChatMessages] = useState<Message[]>([]);
-  const [newMessage, setNewMessage] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [uploading, setUploading] = useState(false);
+export function ProfileScreen({
+  onBack,
+  onLogout,
+  language,
+  setLanguage,
+  userId,
+}: ProfileScreenProps) {
+  const texts = t[language];
+  const supabase = createClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const supabase = createClient();
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
-    loadProfile();
-    loadFriends();
-    loadMessages();
-  }, [userId]);
-
-  // Subscribe to new messages
-  useEffect(() => {
-    const channel = supabase
-      .channel('messages')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'messages',
-          filter: `receiver_id=eq.${userId}`
-        },
-        () => {
-          loadMessages();
-          if (selectedFriend) {
-            loadChatMessages(selectedFriend.id);
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [userId, selectedFriend]);
-
-  const loadProfile = async () => {
-    const { data } = await supabase
-      .from('profiles')
-      .select('username, avatar_url, language')
-      .eq('id', userId)
-      .single();
-
-    if (data) {
-      setUsername(data.username);
-      setAvatarUrl(data.avatar_url);
-      if (data.language) {
-        setLanguage(data.language as Language);
+    async function loadProfile() {
+      setLoading(true);
+      
+      // Get user email
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user?.email) {
+        setEmail(user.email);
       }
+
+      // Get profile
+      const { data } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", userId)
+        .single();
+
+      if (data) {
+        setProfile(data);
+        setUsername(data.username || "");
+        setAvatarUrl(data.avatar_url);
+        if (data.language) {
+          setLanguage(data.language as "hu" | "en");
+        }
+      }
+      setLoading(false);
     }
-  };
 
-  const loadFriends = async () => {
-    // Load accepted friends
-    const { data: acceptedFriends } = await supabase
-      .from('friendships')
-      .select(`
-        id,
-        user_id,
-        friend_id,
-        status,
-        profiles:friend_id (
-          id,
-          username,
-          avatar_url
-        )
-      `)
-      .eq('user_id', userId)
-      .eq('status', 'accepted');
+    loadProfile();
+  }, [userId, supabase, setLanguage]);
 
-    // Also load where I'm the friend
-    const { data: reverseFriends } = await supabase
-      .from('friendships')
-      .select(`
-        id,
-        user_id,
-        friend_id,
-        status,
-        profiles:user_id (
-          id,
-          username,
-          avatar_url
-        )
-      `)
-      .eq('friend_id', userId)
-      .eq('status', 'accepted');
+  const handleSave = async () => {
+    setSaving(true);
+    
+    const { error } = await supabase
+      .from("profiles")
+      .update({
+        username,
+        language,
+        avatar_url: avatarUrl,
+      })
+      .eq("id", userId);
 
-    setFriends([...(acceptedFriends || []), ...(reverseFriends || [])]);
-
-    // Load pending requests
-    const { data: pending } = await supabase
-      .from('friendships')
-      .select(`
-        id,
-        user_id,
-        friend_id,
-        status,
-        profiles:user_id (
-          id,
-          username,
-          avatar_url
-        )
-      `)
-      .eq('friend_id', userId)
-      .eq('status', 'pending');
-
-    setPendingRequests(pending || []);
-  };
-
-  const loadMessages = async () => {
-    const { data } = await supabase
-      .from('messages')
-      .select(`
-        id,
-        sender_id,
-        receiver_id,
-        message,
-        created_at,
-        sender:profiles!messages_sender_id_fkey (
-          id,
-          username,
-          avatar_url
-        )
-      `)
-      .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
-      .order('created_at', { ascending: false });
-
-    setMessages(data || []);
-  };
-
-  const loadChatMessages = async (friendId: string) => {
-    const { data } = await supabase
-      .from('messages')
-      .select(`
-        id,
-        sender_id,
-        receiver_id,
-        message,
-        created_at,
-        sender:profiles!messages_sender_id_fkey (
-          id,
-          username,
-          avatar_url
-        )
-      `)
-      .or(`and(sender_id.eq.${userId},receiver_id.eq.${friendId}),and(sender_id.eq.${friendId},receiver_id.eq.${userId})`)
-      .order('created_at', { ascending: true });
-
-    setChatMessages(data || []);
+    if (!error) {
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    }
+    setSaving(false);
   };
 
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Check file size (max 2MB)
-    if (file.size > 2 * 1024 * 1024) {
-      alert(language === 'hu' ? 'A fájl túl nagy! Maximum 2MB.' : 'File too large! Maximum 2MB.');
-      return;
-    }
-
     setUploading(true);
+    
+    const fileExt = file.name.split(".").pop();
+    const fileName = `${userId}-${Date.now()}.${fileExt}`;
 
-    try {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${userId}-${Date.now()}.${fileExt}`;
-      const filePath = `${fileName}`;
+    const { error: uploadError } = await supabase.storage
+      .from("avatars")
+      .upload(fileName, file, { upsert: true });
 
-      // Upload to Supabase Storage
-      const { error: uploadError } = await supabase.storage
-        .from('avatars')
-        .upload(filePath, file, { upsert: true });
-
-      if (uploadError) throw uploadError;
-
-      // Get public URL
-      const { data: urlData } = supabase.storage
-        .from('avatars')
-        .getPublicUrl(filePath);
-
-      const publicUrl = urlData.publicUrl;
-
-      // Update profile
-      const { error: updateError } = await supabase
-        .from('profiles')
-        .update({ avatar_url: publicUrl })
-        .eq('id', userId);
-
-      if (updateError) throw updateError;
-
-      setAvatarUrl(publicUrl);
-      alert(language === 'hu' ? 'Profilkép feltöltve!' : 'Avatar uploaded!');
-    } catch (error: any) {
-      console.error('Error uploading avatar:', error);
-      alert(language === 'hu' ? 'Hiba a feltöltés során' : 'Error uploading avatar');
-    } finally {
-      setUploading(false);
+    if (!uploadError) {
+      const { data } = supabase.storage
+        .from("avatars")
+        .getPublicUrl(fileName);
+      
+      setAvatarUrl(data.publicUrl);
     }
+    setUploading(false);
   };
 
-  const handleUpdateLanguage = async (newLang: Language) => {
-    await supabase
-      .from('profiles')
-      .update({ language: newLang })
-      .eq('id', userId);
-
-    setLanguage(newLang);
+  const handleLanguageChange = (lang: "hu" | "en") => {
+    setLanguage(lang);
   };
 
-  const handleSearchUsers = async () => {
-    if (!searchQuery.trim()) return;
-
-    setLoading(true);
-    const { data } = await supabase
-      .from('profiles')
-      .select('id, username, avatar_url')
-      .ilike('username', `%${searchQuery}%`)
-      .neq('id', userId)
-      .limit(10);
-
-    setSearchResults(data || []);
-    setLoading(false);
-  };
-
-  const handleSendFriendRequest = async (friendId: string) => {
-    const { data: existing } = await supabase
-      .from('friendships')
-      .select()
-      .or(`and(user_id.eq.${userId},friend_id.eq.${friendId}),and(user_id.eq.${friendId},friend_id.eq.${userId})`)
-      .single();
-
-    if (existing) {
-      alert(language === 'hu' ? 'Már ismerősök vagytok vagy van függő kérés!' : 'Already friends or request pending!');
-      return;
-    }
-
-    await supabase
-      .from('friendships')
-      .insert({
-        user_id: userId,
-        friend_id: friendId,
-        status: 'pending'
-      });
-
-    setSearchQuery('');
-    setSearchResults([]);
-    alert(language === 'hu' ? 'Ismerőskérés elküldve!' : 'Friend request sent!');
-  };
-
-  const handleAcceptRequest = async (friendshipId: string) => {
-    await supabase
-      .from('friendships')
-      .update({ status: 'accepted' })
-      .eq('id', friendshipId);
-
-    await loadFriends();
-  };
-
-  const handleRejectRequest = async (friendshipId: string) => {
-    await supabase
-      .from('friendships')
-      .delete()
-      .eq('id', friendshipId);
-
-    await loadFriends();
-  };
-
-  const handleRemoveFriend = async (friendshipId: string) => {
-    if (!confirm(language === 'hu' ? 'Biztosan törlöd ezt az ismerőst?' : 'Remove this friend?')) {
-      return;
-    }
-
-    await supabase
-      .from('friendships')
-      .delete()
-      .eq('id', friendshipId);
-
-    await loadFriends();
-  };
-
-  const handleOpenChat = (friend: Profile) => {
-    setSelectedFriend(friend);
-    loadChatMessages(friend.id);
-    setView('chat');
-  };
-
-  const handleSendMessage = async () => {
-    if (!newMessage.trim() || !selectedFriend) return;
-
-    const { error } = await supabase
-      .from('messages')
-      .insert({
-        sender_id: userId,
-        receiver_id: selectedFriend.id,
-        message: newMessage.trim()
-      });
-
-    if (!error) {
-      setNewMessage('');
-      await loadChatMessages(selectedFriend.id);
-    }
-  };
-
-  // Profile view
-  if (view === 'profile') {
+  if (loading) {
     return (
-      <div className="min-h-screen bg-black flex flex-col safe-area-top safe-area-bottom">
-        <header className="flex items-center justify-between p-4 border-b-2 border-gold/30">
-          <Button variant="ghost" onClick={onBack} className="text-gold gap-1 hover:bg-gold/10">
-            <ArrowLeft className="w-4 h-4" />
-            {language === 'hu' ? 'Vissza' : 'Back'}
-          </Button>
-          <h1 className="text-lg font-bold text-golden">
-            {language === 'hu' ? 'Profil' : 'Profile'}
-          </h1>
-          <div className="w-16" />
-        </header>
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="animate-spin w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full" />
+      </div>
+    );
+  }
 
-        <main className="flex-1 overflow-y-auto px-4 py-6">
-          <div className="max-w-md mx-auto space-y-6">
-            {/* Avatar and username */}
-            <div className="text-center">
-              <div className="relative w-32 h-32 mx-auto mb-4">
-                <div className="w-full h-full rounded-full border-4 border-gold overflow-hidden bg-gradient-to-br from-gold/20 to-transparent">
+  return (
+    <div className="min-h-screen bg-background">
+      {/* Header */}
+      <div className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b border-border p-4">
+        <div className="flex items-center gap-4">
+          <Button variant="ghost" size="icon" onClick={onBack}>
+            <ArrowLeft className="w-5 h-5" />
+          </Button>
+          <h1 className="text-xl font-bold text-amber-400">{texts.profile}</h1>
+        </div>
+      </div>
+
+      <div className="p-4 space-y-4 max-w-lg mx-auto">
+        {/* Avatar & Username */}
+        <Card className="bg-zinc-900/50 border-zinc-800">
+          <CardContent className="pt-6">
+            <div className="flex flex-col items-center gap-4">
+              {/* Avatar */}
+              <div className="relative w-28 h-28">
+                <div className="w-28 h-28 rounded-full bg-zinc-800 border-3 border-amber-500/50 overflow-hidden flex items-center justify-center shadow-lg shadow-amber-500/20">
                   {avatarUrl ? (
                     <Image
-                      src={avatarUrl}
-                      alt={username}
-                      width={128}
-                      height={128}
-                      className="object-cover w-full h-full"
+                      src={avatarUrl || "/placeholder.svg"}
+                      alt="Avatar"
+                      fill
+                      className="object-cover"
                     />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center bg-zinc-900">
-                      <User className="w-16 h-16 text-gold" />
-                    </div>
+                    <User className="w-14 h-14 text-zinc-500" />
                   )}
                 </div>
                 <button
                   onClick={() => fileInputRef.current?.click()}
                   disabled={uploading}
-                  className="absolute bottom-0 right-0 w-10 h-10 rounded-full bg-gold text-black flex items-center justify-center border-4 border-black hover:scale-110 transition-transform disabled:opacity-50"
+                  className="absolute bottom-1 right-1 w-9 h-9 bg-amber-500 rounded-full flex items-center justify-center hover:bg-amber-600 transition-colors shadow-lg border-2 border-background"
                 >
                   {uploading ? (
-                    <div className="w-5 h-5 border-2 border-black border-t-transparent rounded-full animate-spin" />
+                    <div className="animate-spin w-4 h-4 border-2 border-black border-t-transparent rounded-full" />
                   ) : (
-                    <Camera className="w-5 h-5" />
+                    <Camera className="w-4 h-4 text-black" />
                   )}
                 </button>
                 <input
@@ -427,502 +243,129 @@ export function ProfileScreen({ onBack, onLogout, language, setLanguage, userId 
                   className="hidden"
                 />
               </div>
-              <h2 className="text-2xl font-bold text-white mb-1">{username}</h2>
-              <Badge className="bg-gold/20 text-gold border-gold/30">
-                {language === 'hu' ? 'Aktív felhasználó' : 'Active user'}
-              </Badge>
-            </div>
 
-            {/* Action Buttons */}
-            <div className="space-y-3">
-              <button
-                onClick={() => setView('friends')}
-                className="luxury-card w-full p-4 rounded-xl hover:scale-105 transition-all flex items-center justify-between"
-              >
-                <div className="flex items-center gap-3">
-                  <Users className="w-5 h-5 text-gold" />
-                  <span className="font-semibold text-white">
-                    {language === 'hu' ? 'Ismerősök' : 'Friends'}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  {pendingRequests.length > 0 && (
-                    <Badge className="bg-red-500/20 text-red-400 border-red-500/30">
-                      {pendingRequests.length}
-                    </Badge>
-                  )}
-                  <span className="text-gold font-bold">{friends.length}</span>
-                </div>
-              </button>
-
-              <button
-                onClick={() => setView('messages')}
-                className="luxury-card w-full p-4 rounded-xl hover:scale-105 transition-all flex items-center justify-between"
-              >
-                <div className="flex items-center gap-3">
-                  <MessageCircle className="w-5 h-5 text-gold" />
-                  <span className="font-semibold text-white">
-                    {language === 'hu' ? 'Üzenetek' : 'Messages'}
-                  </span>
-                </div>
-                <span className="text-gold font-bold">{messages.length}</span>
-              </button>
-            </div>
-
-            {/* Language settings */}
-            <div className="luxury-card p-4 rounded-xl">
-              <div className="flex items-center gap-2 mb-3">
-                <Settings className="w-5 h-5 text-gold" />
-                <Label className="text-base font-semibold text-white">
-                  {language === 'hu' ? 'Nyelv' : 'Language'}
-                </Label>
+              {/* Username Input */}
+              <div className="w-full space-y-2">
+                <Label htmlFor="username">{texts.username}</Label>
+                <Input
+                  id="username"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  className="bg-zinc-800 border-zinc-700"
+                  placeholder={texts.username}
+                />
               </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => handleUpdateLanguage('hu')}
-                  className={cn(
-                    'flex-1 py-2 px-4 rounded-lg font-medium transition-all',
-                    language === 'hu'
-                      ? 'bg-gold text-black'
-                      : 'bg-zinc-900 border border-gold/30 text-gold hover:border-gold'
-                  )}
-                >
-                  🇭🇺 Magyar
-                </button>
-                <button
-                  onClick={() => handleUpdateLanguage('en')}
-                  className={cn(
-                    'flex-1 py-2 px-4 rounded-lg font-medium transition-all',
-                    language === 'en'
-                      ? 'bg-gold text-black'
-                      : 'bg-zinc-900 border border-gold/30 text-gold hover:border-gold'
-                  )}
-                >
-                  🇬🇧 English
-                </button>
+
+              {/* Email (read-only) */}
+              <div className="w-full space-y-2">
+                <Label htmlFor="email">{texts.email}</Label>
+                <Input
+                  id="email"
+                  value={email}
+                  disabled
+                  className="bg-zinc-800/50 border-zinc-700 text-muted-foreground"
+                />
               </div>
             </div>
+          </CardContent>
+        </Card>
 
-            {/* Logout button */}
-            <Button
-              onClick={onLogout}
-              variant="outline"
-              className="w-full h-12 bg-transparent border-2 border-red-500 text-red-400 hover:bg-red-500/10 gap-2"
-            >
-              <LogOut className="w-5 h-5" />
-              {language === 'hu' ? 'Kijelentkezés' : 'Logout'}
-            </Button>
-          </div>
-        </main>
-      </div>
-    );
-  }
-
-  // Friends view
-  if (view === 'friends') {
-    return (
-      <div className="min-h-screen bg-black flex flex-col safe-area-top safe-area-bottom">
-        <header className="flex items-center justify-between p-4 border-b-2 border-gold/30">
-          <Button variant="ghost" onClick={() => setView('profile')} className="text-gold gap-1 hover:bg-gold/10">
-            <ArrowLeft className="w-4 h-4" />
-            {language === 'hu' ? 'Vissza' : 'Back'}
-          </Button>
-          <h1 className="text-lg font-bold text-golden">
-            {language === 'hu' ? 'Ismerősök' : 'Friends'}
-          </h1>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setView('add-friend')}
-            className="text-gold hover:bg-gold/10"
-          >
-            <UserPlus className="w-5 h-5" />
-          </Button>
-        </header>
-
-        <main className="flex-1 overflow-y-auto px-4 py-6">
-          <div className="max-w-md mx-auto space-y-6">
-            {/* Pending requests */}
-            {pendingRequests.length > 0 && (
-              <div>
-                <Label className="mb-3 flex items-center gap-2 text-gold">
-                  <Badge className="bg-red-500/20 text-red-400 border-red-500/30">
-                    {pendingRequests.length}
-                  </Badge>
-                  {language === 'hu' ? 'Függő kérések' : 'Pending requests'}
-                </Label>
-                <div className="space-y-2">
-                  {pendingRequests.map((request) => (
-                    <div
-                      key={request.id}
-                      className="luxury-card flex items-center justify-between p-3 rounded-xl"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full border-2 border-gold overflow-hidden bg-zinc-900 flex items-center justify-center">
-                          {request.profiles?.avatar_url ? (
-                            <Image
-                              src={request.profiles.avatar_url}
-                              alt={request.profiles.username || ''}
-                              width={40}
-                              height={40}
-                              className="object-cover"
-                            />
-                          ) : (
-                            <User className="w-5 h-5 text-gold" />
-                          )}
-                        </div>
-                        <span className="font-semibold text-white">
-                          {request.profiles?.username || 'Unknown'}
-                        </span>
-                      </div>
-                      <div className="flex gap-2">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleAcceptRequest(request.id)}
-                          className="text-green-400 hover:text-green-300 hover:bg-green-500/10 h-8 w-8"
-                        >
-                          <Check className="w-5 h-5" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleRejectRequest(request.id)}
-                          className="text-red-400 hover:text-red-300 hover:bg-red-500/10 h-8 w-8"
-                        >
-                          <X className="w-5 h-5" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Friends list */}
-            <div>
-              <Label className="mb-3 text-gold">
-                {language === 'hu' ? 'Ismerősök' : 'Friends'} ({friends.length})
-              </Label>
-              {friends.length === 0 ? (
-                <div className="text-center py-8 luxury-card rounded-xl p-6">
-                  <Users className="w-12 h-12 text-gold mx-auto mb-3 opacity-50" />
-                  <p className="text-muted-foreground">
-                    {language === 'hu' ? 'Még nincs ismerősöd' : 'No friends yet'}
-                  </p>
-                  <Button
-                    variant="ghost"
-                    onClick={() => setView('add-friend')}
-                    className="mt-3 text-gold gap-2 hover:bg-gold/10"
-                  >
-                    <UserPlus className="w-4 h-4" />
-                    {language === 'hu' ? 'Ismerős hozzáadása' : 'Add friend'}
-                  </Button>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {friends.map((friend) => {
-                    const friendProfile = friend.profiles;
-                    return (
-                      <div
-                        key={friend.id}
-                        className="luxury-card flex items-center justify-between p-3 rounded-xl"
-                      >
-                        <div className="flex items-center gap-3 flex-1">
-                          <div className="w-10 h-10 rounded-full border-2 border-gold overflow-hidden bg-zinc-900 flex items-center justify-center">
-                            {friendProfile?.avatar_url ? (
-                              <Image
-                                src={friendProfile.avatar_url}
-                                alt={friendProfile.username || ''}
-                                width={40}
-                                height={40}
-                                className="object-cover"
-                              />
-                            ) : (
-                              <User className="w-5 h-5 text-gold" />
-                            )}
-                          </div>
-                          <span className="font-semibold text-white">
-                            {friendProfile?.username || 'Unknown'}
-                          </span>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => friendProfile && handleOpenChat(friendProfile)}
-                            className="text-gold hover:text-gold/80 hover:bg-gold/10 h-8 w-8"
-                          >
-                            <MessageCircle className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleRemoveFriend(friend.id)}
-                            className="text-red-400 hover:text-red-300 hover:bg-red-500/10 h-8 w-8"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
-        </main>
-      </div>
-    );
-  }
-
-  // Add friend view
-  if (view === 'add-friend') {
-    return (
-      <div className="min-h-screen bg-black flex flex-col safe-area-top safe-area-bottom">
-        <header className="flex items-center justify-between p-4 border-b-2 border-gold/30">
-          <Button variant="ghost" onClick={() => setView('friends')} className="text-gold gap-1 hover:bg-gold/10">
-            <ArrowLeft className="w-4 h-4" />
-            {language === 'hu' ? 'Vissza' : 'Back'}
-          </Button>
-          <h1 className="text-lg font-bold text-golden">
-            {language === 'hu' ? 'Ismerős keresése' : 'Find friends'}
-          </h1>
-          <div className="w-16" />
-        </header>
-
-        <main className="flex-1 overflow-y-auto px-4 py-6">
-          <div className="max-w-md mx-auto space-y-6">
-            {/* Search */}
+        {/* Language Settings */}
+        <Card className="bg-zinc-900/50 border-zinc-800">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Settings className="w-4 h-4" />
+              {texts.language}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
             <div className="flex gap-2">
-              <Input
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleSearchUsers()}
-                placeholder={language === 'hu' ? 'Keress felhasználónév alapján...' : 'Search by username...'}
-                className="flex-1 bg-zinc-900 border-gold/30 text-white placeholder:text-gray-500"
-              />
               <Button
-                onClick={handleSearchUsers}
-                disabled={loading || !searchQuery.trim()}
-                className="luxury-button px-6"
+                variant={language === "hu" ? "default" : "outline"}
+                onClick={() => handleLanguageChange("hu")}
+                className={`flex-1 ${language === "hu" ? "bg-amber-500 hover:bg-amber-600 text-black" : ""}`}
               >
-                <Search className="w-5 h-5" />
+                🇭🇺 {texts.hungarian}
+              </Button>
+              <Button
+                variant={language === "en" ? "default" : "outline"}
+                onClick={() => handleLanguageChange("en")}
+                className={`flex-1 ${language === "en" ? "bg-amber-500 hover:bg-amber-600 text-black" : ""}`}
+              >
+                🇬🇧 {texts.english}
               </Button>
             </div>
+          </CardContent>
+        </Card>
 
-            {/* Search results */}
-            {searchResults.length > 0 && (
-              <div>
-                <Label className="mb-3 text-gold">
-                  {language === 'hu' ? 'Találatok' : 'Results'}
-                </Label>
-                <div className="space-y-2">
-                  {searchResults.map((user) => (
-                    <div
-                      key={user.id}
-                      className="luxury-card flex items-center justify-between p-3 rounded-xl"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full border-2 border-gold overflow-hidden bg-zinc-900 flex items-center justify-center">
-                          {user.avatar_url ? (
-                            <Image
-                              src={user.avatar_url}
-                              alt={user.username}
-                              width={40}
-                              height={40}
-                              className="object-cover"
-                            />
-                          ) : (
-                            <User className="w-5 h-5 text-gold" />
-                          )}
-                        </div>
-                        <span className="font-semibold text-white">{user.username}</span>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleSendFriendRequest(user.id)}
-                        className="text-gold hover:text-gold/80 hover:bg-gold/10 gap-1"
-                      >
-                        <UserPlus className="w-4 h-4" />
-                        {language === 'hu' ? 'Hozzáadás' : 'Add'}
-                      </Button>
-                    </div>
-                  ))}
+        {/* Premium Section */}
+        <Card className="bg-gradient-to-br from-amber-500/10 to-amber-600/5 border-amber-500/30">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2 text-amber-400">
+              <Crown className="w-5 h-5" />
+              {texts.premium}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">{texts.premiumDesc}</p>
+
+            {profile?.is_premium ? (
+              <div className="flex items-center gap-2 text-green-400">
+                <Check className="w-5 h-5" />
+                <span>{texts.subscribed}</span>
+                {profile.premium_until && (
+                  <span className="text-xs text-muted-foreground ml-auto">
+                    {texts.validUntil} {new Date(profile.premium_until).toLocaleDateString()}
+                  </span>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <Button
+                  className="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-black font-semibold"
+                  disabled
+                >
+                  <Star className="w-4 h-4 mr-2" />
+                  {texts.subscribe} - {texts.comingSoon}
+                </Button>
+                <div className="flex justify-center gap-4 text-xs text-muted-foreground">
+                  <span>{texts.monthlyPrice}</span>
+                  <span>•</span>
+                  <span>{texts.yearlyPrice}</span>
                 </div>
               </div>
             )}
+          </CardContent>
+        </Card>
 
-            {searchQuery.trim() && searchResults.length === 0 && !loading && (
-              <div className="text-center py-8 luxury-card rounded-xl p-6">
-                <p className="text-muted-foreground">
-                  {language === 'hu' ? 'Nincs találat' : 'No results'}
-                </p>
-              </div>
-            )}
-          </div>
-        </main>
+        {/* Save Button */}
+        <Button
+          onClick={handleSave}
+          disabled={saving}
+          className="w-full h-12 bg-amber-500 hover:bg-amber-600 text-black font-semibold"
+        >
+          {saving ? (
+            <div className="animate-spin w-5 h-5 border-2 border-black border-t-transparent rounded-full" />
+          ) : saved ? (
+            <>
+              <Check className="w-5 h-5 mr-2" />
+              {texts.saved}
+            </>
+          ) : (
+            texts.save
+          )}
+        </Button>
+
+        {/* Logout Button */}
+        <Button
+          variant="outline"
+          onClick={onLogout}
+          className="w-full h-12 border-red-500/50 text-red-400 hover:bg-red-500/10 hover:text-red-300 bg-transparent"
+        >
+          <LogOut className="w-5 h-5 mr-2" />
+          {texts.logout}
+        </Button>
       </div>
-    );
-  }
-
-  // Messages view
-  if (view === 'messages') {
-    // Group messages by friend
-    const messagesByFriend = messages.reduce((acc, msg) => {
-      const friendId = msg.sender_id === userId ? msg.receiver_id : msg.sender_id;
-      if (!acc[friendId]) {
-        acc[friendId] = [];
-      }
-      acc[friendId].push(msg);
-      return acc;
-    }, {} as { [key: string]: Message[] });
-
-    return (
-      <div className="min-h-screen bg-black flex flex-col safe-area-top safe-area-bottom">
-        <header className="flex items-center justify-between p-4 border-b-2 border-gold/30">
-          <Button variant="ghost" onClick={() => setView('profile')} className="text-gold gap-1 hover:bg-gold/10">
-            <ArrowLeft className="w-4 h-4" />
-            {language === 'hu' ? 'Vissza' : 'Back'}
-          </Button>
-          <h1 className="text-lg font-bold text-golden">
-            {language === 'hu' ? 'Üzenetek' : 'Messages'}
-          </h1>
-          <div className="w-16" />
-        </header>
-
-        <main className="flex-1 overflow-y-auto px-4 py-6">
-          <div className="max-w-md mx-auto space-y-2">
-            {Object.entries(messagesByFriend).map(([friendId, msgs]) => {
-              const lastMsg = msgs[0];
-              const friend = lastMsg.sender_id === userId ? { id: friendId } : lastMsg.sender;
-              
-              return (
-                <button
-                  key={friendId}
-                  onClick={() => friend && handleOpenChat(friend as Profile)}
-                  className="luxury-card w-full p-4 rounded-xl hover:scale-105 transition-all text-left"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-full border-2 border-gold overflow-hidden bg-zinc-900 flex items-center justify-center">
-                      {friend && 'avatar_url' in friend && friend.avatar_url ? (
-                        <Image
-                          src={friend.avatar_url}
-                          alt={friend.username || ''}
-                          width={48}
-                          height={48}
-                          className="object-cover"
-                        />
-                      ) : (
-                        <User className="w-6 h-6 text-gold" />
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-white">
-                        {friend && 'username' in friend ? friend.username : 'Unknown'}
-                      </p>
-                      <p className="text-sm text-gray-400 truncate">
-                        {lastMsg.message}
-                      </p>
-                    </div>
-                    <MessageCircle className="w-5 h-5 text-gold" />
-                  </div>
-                </button>
-              );
-            })}
-
-            {Object.keys(messagesByFriend).length === 0 && (
-              <div className="text-center py-8 luxury-card rounded-xl p-6">
-                <MessageCircle className="w-12 h-12 text-gold mx-auto mb-3 opacity-50" />
-                <p className="text-muted-foreground">
-                  {language === 'hu' ? 'Nincs még üzeneted' : 'No messages yet'}
-                </p>
-              </div>
-            )}
-          </div>
-        </main>
-      </div>
-    );
-  }
-
-  // Chat view
-  if (view === 'chat' && selectedFriend) {
-    return (
-      <div className="min-h-screen bg-black flex flex-col safe-area-top safe-area-bottom">
-        <header className="flex items-center justify-between p-4 border-b-2 border-gold/30">
-          <Button variant="ghost" onClick={() => setView('messages')} className="text-gold gap-1 hover:bg-gold/10">
-            <ArrowLeft className="w-4 h-4" />
-            {language === 'hu' ? 'Vissza' : 'Back'}
-          </Button>
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-full border-2 border-gold overflow-hidden bg-zinc-900 flex items-center justify-center">
-              {selectedFriend.avatar_url ? (
-                <Image
-                  src={selectedFriend.avatar_url}
-                  alt={selectedFriend.username}
-                  width={32}
-                  height={32}
-                  className="object-cover"
-                />
-              ) : (
-                <User className="w-4 h-4 text-gold" />
-              )}
-            </div>
-            <h1 className="text-lg font-bold text-golden">{selectedFriend.username}</h1>
-          </div>
-          <div className="w-16" />
-        </header>
-
-        <main className="flex-1 overflow-y-auto px-4 py-6">
-          <div className="max-w-md mx-auto space-y-3">
-            {chatMessages.map((msg) => {
-              const isMe = msg.sender_id === userId;
-              return (
-                <div
-                  key={msg.id}
-                  className={cn('flex', isMe ? 'justify-end' : 'justify-start')}
-                >
-                  <div
-                    className={cn(
-                      'max-w-[75%] p-3 rounded-2xl',
-                      isMe
-                        ? 'bg-gold text-black rounded-br-sm'
-                        : 'luxury-card text-white rounded-bl-sm'
-                    )}
-                  >
-                    <p className="text-sm">{msg.message}</p>
-                    <p className={cn('text-xs mt-1', isMe ? 'text-black/60' : 'text-gray-400')}>
-                      {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </p>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </main>
-
-        <div className="p-4 border-t-2 border-gold/30">
-          <div className="flex gap-2 max-w-md mx-auto">
-            <Input
-              value={newMessage}
-              onChange={(e) => setNewMessage(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
-              placeholder={language === 'hu' ? 'Írj üzenetet...' : 'Type a message...'}
-              className="flex-1 bg-zinc-900 border-gold/30 text-white placeholder:text-gray-500"
-            />
-            <Button
-              onClick={handleSendMessage}
-              disabled={!newMessage.trim()}
-              className="luxury-button px-6"
-            >
-              <Send className="w-5 h-5" />
-            </Button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return null;
+    </div>
+  );
 }

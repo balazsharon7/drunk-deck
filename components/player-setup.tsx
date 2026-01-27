@@ -183,7 +183,7 @@ export function PlayerSetup({ onStartGame, className }: PlayerSetupProps) {
                   className="w-full p-2 mb-2 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary font-medium flex items-center gap-2 transition-colors"
                 >
                   <Pencil className="w-4 h-4" />
-                  {language === 'hu' ? 'Sajat nev megadasa...' : 'Enter custom name...'}
+                  {language === 'hu' ? 'Saját név megadása...' : 'Enter custom name...'}
                 </button>
                 
                 {/* Funny names grid */}
@@ -213,7 +213,7 @@ export function PlayerSetup({ onStartGame, className }: PlayerSetupProps) {
           className="w-full h-12 border-dashed border-2 border-primary/30 hover:border-primary/50 hover:bg-primary/5 gap-2 bg-transparent"
         >
           <Plus className="w-5 h-5" />
-          {language === 'hu' ? 'Uj jatekos hozzaadasa' : 'Add new player'}
+          {language === 'hu' ? 'Új játekos hozzáadasa' : 'Add new player'}
         </Button>
       )}
 

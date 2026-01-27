@@ -97,12 +97,10 @@ function GameRouter() {
     setView('game-detail');
   };
 
-  const handleStartGame = () => {
-    if (selectedGame) {
-      setCurrentGame(selectedGame.id as GameType);
-      setIsOnlineGame(false);
-      setView('game');
-    }
+  const handleStartGame = (gameId: string) => {
+    setCurrentGame(gameId as GameType);
+    setIsOnlineGame(false);
+    setView('game');
   };
 
   const handleGoOnline = () => {

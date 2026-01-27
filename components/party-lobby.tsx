@@ -1,119 +1,86 @@
-'use client';
+"use client"
 
-import { useState, useEffect } from 'react';
-import { useGame } from '@/lib/game-context';
-import { createClient } from '@/lib/supabase/client';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
-import { GAMES } from '@/lib/game-catalog';
-import type { GameType } from '@/lib/game-types';
+import { useState, useEffect, useCallback } from "react"
+import Image from "next/image"
+import { createClient } from "@/lib/supabase/client"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
 import { 
-  ArrowLeft, 
   Users, 
   Copy, 
   Check, 
   Crown, 
-  UserPlus,
+  LogOut, 
   Play,
-  RefreshCw,
-  Link as LinkIcon
-} from 'lucide-react';
-import { cn } from '@/lib/utils';
+  Loader2,
+  UserPlus,
+  ArrowLeft,
+  User
+} from "lucide-react"
+import type { GameType } from "@/lib/game-types"
 
-interface PartyLobbyProps {
-  userId: string;
-  username: string;
-  onStartGame: (gameType: GameType, partyId: string, members: any[]) => void;
-  onLeave: () => void;
+interface PartyMember {
+  id: string
+  user_id: string
+  is_ready: boolean
+  profiles: {
+    username: string
+    avatar_url: string | null
+  }
 }
 
 interface Party {
-  id: string;
-  code: string;
-  name: string;
-  host_id: string;
-  game_type: string;
-  status: string;
-  max_players: number;
+  id: string
+  code: string
+  host_id: string
+  game_type: GameType | null
+  status: string
+  game_state: Record<string, unknown> | null
 }
 
-interface PartyMember {
-  id: string;
-  user_id: string;
-  is_ready: boolean;
-  profiles: {
-    username: string;
-    avatar_url?: string;
-  };
+interface PartyLobbyProps {
+  userId: string
+  username: string
+  onStartGame: (gameType: GameType, partyId: string, members: PartyMember[]) => void
+  onLeave: () => void
 }
+
+const GAMES: { type: GameType; name: string; description: string; icon: string }[] = [
+  { type: "kings-cup", name: "4 Király", description: "Klasszikus kártya játék", icon: "/icons/kings-cup.png" },
+  { type: "ride-the-bus", name: "Busz", description: "Találd ki a kártyákat", icon: "/icons/ride-the-bus.png" },
+  { type: "blackjack", name: "Blackjack", description: "21-es ivós verzió", icon: "/icons/blackjack.png" },
+  { type: "charades", name: "Homlok Játék", description: "Találd ki mit mutatnak", icon: "/icons/charades.jpg" },
+  { type: "taboo", name: "Egyszótagos", description: "Írd körül egyszótagúan", icon: "/icons/taboo.jpg" },
+  { type: "rating-game", name: "Rangsorolós", description: "Találd ki a sorrendet", icon: "/icons/rating-game.jpg" },
+]
 
 export function PartyLobby({ userId, username, onStartGame, onLeave }: PartyLobbyProps) {
-  const { language } = useGame();
-  const [view, setView] = useState<'menu' | 'create' | 'join' | 'lobby'>('menu');
-  const [partyCode, setPartyCode] = useState('');
-  const [partyName, setPartyName] = useState('');
-  const [selectedGame, setSelectedGame] = useState<GameType>('kings-cup');
-  const [currentParty, setCurrentParty] = useState<Party | null>(null);
-  const [members, setMembers] = useState<PartyMember[]>([]);
-  const [isReady, setIsReady] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [party, setParty] = useState<Party | null>(null)
+  const [members, setMembers] = useState<PartyMember[]>([])
+  const [joinCode, setJoinCode] = useState("")
+  const [loading, setLoading] = useState(false)
+  const [copied, setCopied] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [selectedGame, setSelectedGame] = useState<GameType | null>(null)
 
-  const supabase = createClient();
-  const isHost = currentParty?.host_id === userId;
-  const allReady = members.every(m => m.is_ready || m.user_id === currentParty?.host_id);
-  const canStart = isHost && members.length >= 2 && allReady;
+  const supabase = createClient()
 
-  // Subscribe to party changes
-  useEffect(() => {
-    if (!currentParty) return;
+  const fetchPartyData = useCallback(async (partyId: string) => {
+    const { data: partyData } = await supabase
+      .from("parties")
+      .select("*")
+      .eq("id", partyId)
+      .single()
 
-    const channel = supabase
-      .channel(`party:${currentParty.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'party_members',
-          filter: `party_id=eq.${currentParty.id}`
-        },
-        () => {
-          loadMembers();
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'parties',
-          filter: `id=eq.${currentParty.id}`
-        },
-        (payload) => {
-          const updatedParty = payload.new as Party;
-          setCurrentParty(updatedParty);
-          
-          if (updatedParty.status === 'playing') {
-            onStartGame(updatedParty.game_type as GameType, updatedParty.id, members);
-          }
-        }
-      )
-      .subscribe();
+    if (partyData) {
+      setParty(partyData)
+      setSelectedGame(partyData.game_type)
+    }
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [currentParty, supabase, onStartGame, members]);
-
-  const loadMembers = async () => {
-    if (!currentParty) return;
-
-    const { data, error } = await supabase
-      .from('party_members')
+    const { data: membersData } = await supabase
+      .from("party_members")
       .select(`
         id,
         user_id,
@@ -123,512 +90,499 @@ export function PartyLobby({ userId, username, onStartGame, onLeave }: PartyLobb
           avatar_url
         )
       `)
-      .eq('party_id', currentParty.id);
+      .eq("party_id", partyId)
 
-    if (error) {
-      console.error('Error loading members:', error);
-      return;
+    if (membersData) {
+      setMembers(membersData as unknown as PartyMember[])
     }
+  }, [supabase])
 
-    setMembers(data as PartyMember[]);
-  };
+  const checkExistingParty = useCallback(async () => {
+    const { data } = await supabase
+      .from("party_members")
+      .select("party_id")
+      .eq("user_id", userId)
+      .single()
 
-  const handleCreateParty = async () => {
-    if (!partyName.trim()) {
-      setError(language === 'hu' ? 'Add meg a party nevét!' : 'Enter party name!');
-      return;
+    if (data?.party_id) {
+      await fetchPartyData(data.party_id)
     }
+  }, [supabase, userId, fetchPartyData])
 
-    setLoading(true);
-    setError('');
+  useEffect(() => {
+    checkExistingParty()
+  }, [checkExistingParty])
 
-    try {
-      // Generate unique party code
-      const code = Math.random().toString(36).substring(2, 8).toUpperCase();
+  useEffect(() => {
+    if (!party?.id) return
 
-      const { data: party, error: partyError } = await supabase
-        .from('parties')
-        .insert({
-          code,
-          name: partyName,
-          host_id: userId,
-          game_type: selectedGame,
-          status: 'waiting',
-          max_players: 10
-        })
-        .select()
-        .single();
+    const channel = supabase
+      .channel(`party:${party.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "party_members",
+          filter: `party_id=eq.${party.id}`,
+        },
+        () => {
+          fetchPartyData(party.id)
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "parties",
+          filter: `id=eq.${party.id}`,
+        },
+        (payload) => {
+          const updatedParty = payload.new as Party
+          setParty(updatedParty)
+          setSelectedGame(updatedParty.game_type)
+          
+          if (updatedParty.status === "playing" && updatedParty.game_type) {
+            onStartGame(updatedParty.game_type, updatedParty.id, members)
+          }
+        }
+      )
+      .subscribe()
 
-      if (partyError) throw partyError;
-
-      // Join the party
-      const { error: memberError } = await supabase
-        .from('party_members')
-        .insert({
-          party_id: party.id,
-          user_id: userId,
-          is_ready: true
-        });
-
-      if (memberError) throw memberError;
-
-      setCurrentParty(party);
-      setView('lobby');
-      await loadMembers();
-    } catch (err) {
-      console.error('Error creating party:', err);
-      setError(language === 'hu' ? 'Hiba a party létrehozásakor' : 'Error creating party');
-    } finally {
-      setLoading(false);
+    return () => {
+      supabase.removeChannel(channel)
     }
-  };
+  }, [party?.id, supabase, fetchPartyData, onStartGame, members])
 
-  const handleJoinParty = async () => {
-    if (!partyCode.trim()) {
-      setError(language === 'hu' ? 'Add meg a party kódot!' : 'Enter party code!');
-      return;
+  const generateCode = () => {
+    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+    let code = ""
+    for (let i = 0; i < 6; i++) {
+      code += chars[Math.floor(Math.random() * chars.length)]
     }
-
-    setLoading(true);
-    setError('');
-
-    try {
-      // Find party by code
-      const { data: party, error: partyError } = await supabase
-        .from('parties')
-        .select()
-        .eq('code', partyCode.toUpperCase())
-        .eq('status', 'waiting')
-        .single();
-
-      if (partyError || !party) {
-        setError(language === 'hu' ? 'Party nem található!' : 'Party not found!');
-        return;
-      }
-
-      // Check if already member
-      const { data: existingMember } = await supabase
-        .from('party_members')
-        .select()
-        .eq('party_id', party.id)
-        .eq('user_id', userId)
-        .single();
-
-      if (!existingMember) {
-        // Join the party
-        const { error: memberError } = await supabase
-          .from('party_members')
-          .insert({
-            party_id: party.id,
-            user_id: userId,
-            is_ready: false
-          });
-
-        if (memberError) throw memberError;
-      }
-
-      setCurrentParty(party);
-      setView('lobby');
-      await loadMembers();
-    } catch (err) {
-      console.error('Error joining party:', err);
-      setError(language === 'hu' ? 'Hiba a csatlakozáskor' : 'Error joining party');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleToggleReady = async () => {
-    if (!currentParty || isHost) return;
-
-    const newReadyState = !isReady;
-    setIsReady(newReadyState);
-
-    await supabase
-      .from('party_members')
-      .update({ is_ready: newReadyState })
-      .eq('party_id', currentParty.id)
-      .eq('user_id', userId);
-  };
-
-  const handleStartGame = async () => {
-    if (!currentParty || !canStart) return;
-
-    await supabase
-      .from('parties')
-      .update({ status: 'playing' })
-      .eq('id', currentParty.id);
-  };
-
-  const handleLeaveParty = async () => {
-    if (!currentParty) return;
-
-    await supabase
-      .from('party_members')
-      .delete()
-      .eq('party_id', currentParty.id)
-      .eq('user_id', userId);
-
-    if (isHost) {
-      await supabase
-        .from('parties')
-        .delete()
-        .eq('id', currentParty.id);
-    }
-
-    setCurrentParty(null);
-    setMembers([]);
-    setIsReady(false);
-    setView('menu');
-  };
-
-  const copyPartyCode = () => {
-    if (currentParty) {
-      navigator.clipboard.writeText(currentParty.code);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
-  };
-
-  // Menu view
-  if (view === 'menu') {
-    return (
-      <div className="min-h-screen bg-background flex flex-col safe-area-top safe-area-bottom">
-        <header className="flex items-center justify-between p-4 border-b border-border/30">
-          <Button variant="ghost" onClick={onLeave} className="text-muted-foreground gap-1">
-            <ArrowLeft className="w-4 h-4" />
-            {language === 'hu' ? 'Vissza' : 'Back'}
-          </Button>
-          <h1 className="text-lg font-bold text-amber-400">Online Party</h1>
-          <div className="w-16" />
-        </header>
-
-        <main className="flex-1 flex flex-col items-center justify-center px-4 py-8">
-          <div className="w-full max-w-md space-y-4">
-            <div className="text-center mb-8">
-              <Users className="w-16 h-16 text-amber-400 mx-auto mb-4" />
-              <h2 className="text-2xl font-bold text-white mb-2">
-                {language === 'hu' ? 'Játssz barátaiddal!' : 'Play with friends!'}
-              </h2>
-              <p className="text-muted-foreground">
-                {language === 'hu' 
-                  ? 'Hozz létre partyt vagy csatlakozz egy meglévőhöz'
-                  : 'Create a party or join an existing one'}
-              </p>
-            </div>
-
-            <Button
-              onClick={() => setView('create')}
-              className="w-full h-14 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-black font-bold text-lg gap-2"
-            >
-              <Users className="w-5 h-5" />
-              {language === 'hu' ? 'Party létrehozása' : 'Create Party'}
-            </Button>
-
-            <Button
-              onClick={() => setView('join')}
-              variant="outline"
-              className="w-full h-14 bg-transparent border-amber-500/30 text-amber-400 hover:bg-amber-500/10 font-bold text-lg gap-2"
-            >
-              <UserPlus className="w-5 h-5" />
-              {language === 'hu' ? 'Csatlakozás partyhoz' : 'Join Party'}
-            </Button>
-          </div>
-        </main>
-      </div>
-    );
+    return code
   }
 
-  // Create party view
-  if (view === 'create') {
-    const gameOptions = GAMES.filter(g => !g.isOnlineOnly || g.isOnlineOnly);
+  const createParty = async () => {
+    setLoading(true)
+    setError(null)
 
+    try {
+      const code = generateCode()
+      
+      const { data: partyData, error: partyError } = await supabase
+        .from("parties")
+        .insert({
+          code,
+          host_id: userId,
+          status: "waiting",
+        })
+        .select()
+        .single()
+
+      if (partyError) throw partyError
+
+      const { error: memberError } = await supabase
+        .from("party_members")
+        .insert({
+          party_id: partyData.id,
+          user_id: userId,
+          is_ready: true,
+        })
+
+      if (memberError) throw memberError
+
+      await fetchPartyData(partyData.id)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Hiba történt")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const joinParty = async () => {
+    if (!joinCode.trim()) return
+    setLoading(true)
+    setError(null)
+
+    try {
+      const { data: partyData, error: partyError } = await supabase
+        .from("parties")
+        .select("*")
+        .eq("code", joinCode.toUpperCase())
+        .eq("status", "waiting")
+        .single()
+
+      if (partyError || !partyData) {
+        throw new Error("Party nem található vagy már elkezdődött")
+      }
+
+      const { data: existingMember } = await supabase
+        .from("party_members")
+        .select("id")
+        .eq("party_id", partyData.id)
+        .eq("user_id", userId)
+        .single()
+
+      if (existingMember) {
+        await fetchPartyData(partyData.id)
+        return
+      }
+
+      const { data: memberCount } = await supabase
+        .from("party_members")
+        .select("id", { count: "exact" })
+        .eq("party_id", partyData.id)
+
+      if (memberCount && memberCount.length >= 10) {
+        throw new Error("A party tele van (max 10 játékos)")
+      }
+
+      const { error: memberError } = await supabase
+        .from("party_members")
+        .insert({
+          party_id: partyData.id,
+          user_id: userId,
+          is_ready: false,
+        })
+
+      if (memberError) throw memberError
+
+      await fetchPartyData(partyData.id)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Hiba történt")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const leaveParty = async () => {
+    if (!party) return
+    setLoading(true)
+
+    try {
+      const isHost = party.host_id === userId
+
+      await supabase
+        .from("party_members")
+        .delete()
+        .eq("party_id", party.id)
+        .eq("user_id", userId)
+
+      if (isHost) {
+        const remainingMembers = members.filter((m) => m.user_id !== userId)
+        if (remainingMembers.length > 0) {
+          await supabase
+            .from("parties")
+            .update({ host_id: remainingMembers[0].user_id })
+            .eq("id", party.id)
+        } else {
+          await supabase.from("parties").delete().eq("id", party.id)
+        }
+      }
+
+      setParty(null)
+      setMembers([])
+      onLeave()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Hiba történt")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const copyCode = async () => {
+    if (!party?.code) return
+    await navigator.clipboard.writeText(party.code)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  const selectGame = async (gameType: GameType) => {
+    if (!party || party.host_id !== userId) return
+    
+    setSelectedGame(gameType)
+    await supabase
+      .from("parties")
+      .update({ game_type: gameType })
+      .eq("id", party.id)
+  }
+
+  const startGame = async () => {
+    if (!party || !selectedGame || party.host_id !== userId) return
+    
+    await supabase
+      .from("parties")
+      .update({ status: "playing" })
+      .eq("id", party.id)
+
+    onStartGame(selectedGame, party.id, members)
+  }
+
+  const isHost = party?.host_id === userId
+
+  // No party yet - show create/join screen
+  if (!party) {
     return (
-      <div className="min-h-screen bg-background flex flex-col safe-area-top safe-area-bottom">
-        <header className="flex items-center justify-between p-4 border-b border-border/30">
-          <Button variant="ghost" onClick={() => setView('menu')} className="text-muted-foreground gap-1">
-            <ArrowLeft className="w-4 h-4" />
-            {language === 'hu' ? 'Vissza' : 'Back'}
+      <div className="min-h-screen bg-background p-4">
+        {/* Header */}
+        <div className="flex items-center gap-4 mb-6">
+          <Button variant="ghost" size="icon" onClick={onLeave}>
+            <ArrowLeft className="w-5 h-5" />
           </Button>
-          <h1 className="text-lg font-bold text-amber-400">
-            {language === 'hu' ? 'Party létrehozása' : 'Create Party'}
-          </h1>
-          <div className="w-16" />
-        </header>
+          <h1 className="text-xl font-bold text-amber-400">Online Party</h1>
+        </div>
 
-        <main className="flex-1 overflow-y-auto px-4 py-6">
-          <div className="max-w-md mx-auto space-y-6">
-            <div>
-              <Label htmlFor="partyName" className="mb-2">
-                {language === 'hu' ? 'Party neve' : 'Party name'}
-              </Label>
-              <Input
-                id="partyName"
-                value={partyName}
-                onChange={(e) => setPartyName(e.target.value)}
-                placeholder={language === 'hu' ? 'Pl: Pénteki buli' : 'E.g: Friday Night'}
-                className="bg-card/50 border-border/50 focus:border-amber-500/50"
+        <div className="max-w-md mx-auto space-y-6">
+          {/* Logo */}
+          <div className="flex justify-center">
+            <div className="w-24 h-24 rounded-full overflow-hidden border-2 border-amber-500/30 shadow-lg shadow-amber-500/20">
+              <Image
+                src="/logo.png"
+                alt="Drunk Deck"
+                width={96}
+                height={96}
+                className="object-cover scale-125"
               />
             </div>
+          </div>
 
-            <div>
-              <Label className="mb-2">
-                {language === 'hu' ? 'Válassz játékot' : 'Select game'}
-              </Label>
-              <div className="grid grid-cols-2 gap-3">
-                {gameOptions.map((game) => (
-                  <button
-                    key={game.id}
-                    onClick={() => setSelectedGame(game.id as GameType)}
-                    className={cn(
-                      'p-4 rounded-xl border-2 transition-all text-left',
-                      selectedGame === game.id
-                        ? 'bg-amber-500/20 border-amber-500'
-                        : 'bg-card/50 border-border/30 hover:border-amber-500/50'
+          <div className="text-center text-muted-foreground">
+            Üdvözöllek, <span className="text-amber-400 font-semibold">{username}</span>!
+          </div>
+
+          {/* Create Party */}
+          <Button
+            onClick={createParty}
+            disabled={loading}
+            className="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-black h-14 text-lg font-semibold rounded-2xl"
+          >
+            {loading ? (
+              <Loader2 className="h-5 w-5 animate-spin" />
+            ) : (
+              <>
+                <Crown className="h-5 w-5 mr-2" />
+                Új Party létrehozása
+              </>
+            )}
+          </Button>
+
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t border-border" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-background px-2 text-muted-foreground">vagy</span>
+            </div>
+          </div>
+
+          {/* Join Party */}
+          <div className="space-y-3">
+            <Input
+              placeholder="Party kód (pl. ABC123)"
+              value={joinCode}
+              onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+              className="text-center text-lg tracking-widest bg-zinc-900/50 border-zinc-700 uppercase h-14 rounded-2xl"
+              maxLength={6}
+            />
+            <Button
+              onClick={joinParty}
+              disabled={loading || joinCode.length < 6}
+              variant="outline"
+              className="w-full border-amber-500/30 text-amber-400 hover:bg-amber-500/10 h-12 rounded-2xl bg-transparent"
+            >
+              <UserPlus className="h-5 w-5 mr-2" />
+              Csatlakozás
+            </Button>
+          </div>
+
+          {error && (
+            <p className="text-sm text-red-400 bg-red-500/10 p-3 rounded-xl text-center">
+              {error}
+            </p>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  // In party - show lobby
+  return (
+    <div className="min-h-screen bg-background p-4">
+      {/* Header */}
+      <div className="flex items-center gap-4 mb-6">
+        <Button variant="ghost" size="icon" onClick={leaveParty} disabled={loading}>
+          <ArrowLeft className="w-5 h-5" />
+        </Button>
+        <h1 className="text-xl font-bold text-amber-400">Party Lobby</h1>
+      </div>
+
+      <div className="max-w-2xl mx-auto space-y-6">
+        {/* Party Code */}
+        <Card className="bg-zinc-900/50 border-zinc-800">
+          <CardContent className="pt-6">
+            <div className="text-center mb-2 text-sm text-muted-foreground">Party Kód</div>
+            <div className="flex items-center justify-center gap-3">
+              <span className="text-4xl font-mono font-bold tracking-widest text-amber-400">
+                {party.code}
+              </span>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={copyCode}
+                className="border-amber-500/30 bg-transparent hover:bg-amber-500/10"
+              >
+                {copied ? (
+                  <Check className="h-4 w-4 text-green-500" />
+                ) : (
+                  <Copy className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
+            <p className="text-center text-muted-foreground text-sm mt-2">
+              Oszd meg a barátaiddal!
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* Members */}
+        <Card className="bg-zinc-900/50 border-zinc-800">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Users className="h-5 w-5 text-amber-400" />
+              Játékosok ({members.length}/10)
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {members.map((member) => (
+                <div
+                  key={member.id}
+                  className="flex items-center justify-between p-3 rounded-xl bg-zinc-800/50"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-zinc-700 overflow-hidden flex items-center justify-center border border-amber-500/30">
+                      {member.profiles?.avatar_url ? (
+                        <Image
+                          src={member.profiles.avatar_url || "/placeholder.svg"}
+                          alt={member.profiles?.username || "Avatar"}
+                          width={40}
+                          height={40}
+                          className="object-cover"
+                        />
+                      ) : (
+                        <User className="w-5 h-5 text-zinc-400" />
+                      )}
+                    </div>
+                    <span className="font-medium">
+                      {member.profiles?.username || "Ismeretlen"}
+                    </span>
+                    {member.user_id === userId && (
+                      <Badge variant="outline" className="text-xs border-amber-500/30 text-amber-400">
+                        Te
+                      </Badge>
                     )}
+                  </div>
+                  {party.host_id === member.user_id && (
+                    <Crown className="h-5 w-5 text-amber-400" />
+                  )}
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Game Selection - Host only */}
+        {isHost && (
+          <Card className="bg-zinc-900/50 border-zinc-800">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-lg">Válassz játékot</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 gap-3">
+                {GAMES.map((game) => (
+                  <button
+                    key={game.type}
+                    onClick={() => selectGame(game.type)}
+                    className={`p-3 rounded-xl text-left transition-all flex items-center gap-3 ${
+                      selectedGame === game.type
+                        ? "bg-amber-500/20 border-2 border-amber-500"
+                        : "bg-zinc-800/50 border-2 border-transparent hover:border-amber-500/30"
+                    }`}
                   >
-                    <p className="font-bold text-white mb-1">
-                      {language === 'hu' ? game.name : game.nameEn}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {game.minPlayers}-{game.maxPlayers} {language === 'hu' ? 'játékos' : 'players'}
-                    </p>
+                    <div className="w-12 h-12 rounded-full overflow-hidden flex-shrink-0 border border-amber-500/30">
+                      <Image
+                        src={game.icon || "/placeholder.svg"}
+                        alt={game.name}
+                        width={48}
+                        height={48}
+                        className="object-cover"
+                      />
+                    </div>
+                    <div>
+                      <div className="font-semibold text-sm">{game.name}</div>
+                      <div className="text-xs text-muted-foreground">{game.description}</div>
+                    </div>
                   </button>
                 ))}
               </div>
-            </div>
+            </CardContent>
+          </Card>
+        )}
 
-            {error && (
-              <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
-                {error}
-              </div>
-            )}
-
-            <Button
-              onClick={handleCreateParty}
-              disabled={loading || !partyName.trim()}
-              className="w-full h-14 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-black font-bold text-lg"
-            >
-              {loading ? (
-                <RefreshCw className="w-5 h-5 animate-spin" />
-              ) : (
-                <>
-                  {language === 'hu' ? 'Party létrehozása' : 'Create Party'}
-                </>
-              )}
-            </Button>
-          </div>
-        </main>
-      </div>
-    );
-  }
-
-  // Join party view
-  if (view === 'join') {
-    return (
-      <div className="min-h-screen bg-background flex flex-col safe-area-top safe-area-bottom">
-        <header className="flex items-center justify-between p-4 border-b border-border/30">
-          <Button variant="ghost" onClick={() => setView('menu')} className="text-muted-foreground gap-1">
-            <ArrowLeft className="w-4 h-4" />
-            {language === 'hu' ? 'Vissza' : 'Back'}
-          </Button>
-          <h1 className="text-lg font-bold text-amber-400">
-            {language === 'hu' ? 'Csatlakozás' : 'Join Party'}
-          </h1>
-          <div className="w-16" />
-        </header>
-
-        <main className="flex-1 flex flex-col items-center justify-center px-4 py-8">
-          <div className="w-full max-w-md space-y-6">
-            <div className="text-center">
-              <LinkIcon className="w-16 h-16 text-amber-400 mx-auto mb-4" />
-              <h2 className="text-xl font-bold text-white mb-2">
-                {language === 'hu' ? 'Add meg a party kódot' : 'Enter party code'}
-              </h2>
-              <p className="text-sm text-muted-foreground">
-                {language === 'hu'
-                  ? 'Kérd el a kódot a party gazdájától'
-                  : 'Get the code from the party host'}
+        {/* Selected game - Non-host */}
+        {!isHost && selectedGame && (
+          <Card className="bg-zinc-900/50 border-zinc-800">
+            <CardContent className="pt-6 text-center">
+              <p className="text-muted-foreground">
+                Kiválasztott játék: <span className="text-amber-400 font-semibold">
+                  {GAMES.find((g) => g.type === selectedGame)?.name}
+                </span>
               </p>
-            </div>
-
-            <div>
-              <Input
-                value={partyCode}
-                onChange={(e) => setPartyCode(e.target.value.toUpperCase())}
-                placeholder="ABC123"
-                maxLength={6}
-                className="text-center text-2xl font-bold tracking-wider bg-card/50 border-border/50 focus:border-amber-500/50 h-16"
-              />
-            </div>
-
-            {error && (
-              <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm text-center">
-                {error}
-              </div>
-            )}
-
-            <Button
-              onClick={handleJoinParty}
-              disabled={loading || partyCode.length !== 6}
-              className="w-full h-14 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-black font-bold text-lg"
-            >
-              {loading ? (
-                <RefreshCw className="w-5 h-5 animate-spin" />
-              ) : (
-                <>
-                  {language === 'hu' ? 'Csatlakozás' : 'Join'}
-                </>
-              )}
-            </Button>
-          </div>
-        </main>
-      </div>
-    );
-  }
-
-  // Lobby view
-  if (view === 'lobby' && currentParty) {
-    const selectedGameInfo = GAMES.find(g => g.id === currentParty.game_type);
-
-    return (
-      <div className="min-h-screen bg-background flex flex-col safe-area-top safe-area-bottom">
-        <header className="flex items-center justify-between p-4 border-b border-border/30">
-          <Button variant="ghost" onClick={handleLeaveParty} className="text-muted-foreground gap-1">
-            <ArrowLeft className="w-4 h-4" />
-            {language === 'hu' ? 'Kilépés' : 'Leave'}
-          </Button>
-          <h1 className="text-lg font-bold text-amber-400">{currentParty.name}</h1>
-          <div className="w-16" />
-        </header>
-
-        <main className="flex-1 overflow-y-auto px-4 py-6">
-          <div className="max-w-md mx-auto space-y-6">
-            {/* Party code */}
-            <div className="p-4 rounded-xl bg-gradient-to-br from-amber-500/20 to-amber-600/10 border border-amber-500/30">
-              <p className="text-sm text-muted-foreground text-center mb-2">
-                {language === 'hu' ? 'Party kód' : 'Party code'}
+              <p className="text-sm text-muted-foreground mt-2">
+                Várakozás a host-ra...
               </p>
-              <div className="flex items-center justify-center gap-3">
-                <p className="text-3xl font-bold text-amber-400 tracking-wider">
-                  {currentParty.code}
-                </p>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={copyPartyCode}
-                  className="text-amber-400 hover:text-amber-300 hover:bg-amber-500/10"
-                >
-                  {copied ? <Check className="w-5 h-5" /> : <Copy className="w-5 h-5" />}
-                </Button>
-              </div>
-            </div>
+            </CardContent>
+          </Card>
+        )}
 
-            {/* Selected game */}
-            {selectedGameInfo && (
-              <div className="p-4 rounded-xl bg-card/50 border border-border/30">
-                <p className="text-sm text-muted-foreground mb-2">
-                  {language === 'hu' ? 'Kiválasztott játék' : 'Selected game'}
-                </p>
-                <p className="font-bold text-white">
-                  {language === 'hu' ? selectedGameInfo.name : selectedGameInfo.nameEn}
-                </p>
-              </div>
-            )}
+        {/* Action Buttons */}
+        <div className="flex gap-3">
+          <Button
+            variant="outline"
+            onClick={leaveParty}
+            disabled={loading}
+            className="flex-1 border-red-500/30 text-red-400 hover:bg-red-500/10 h-12 rounded-xl bg-transparent"
+          >
+            <LogOut className="h-4 w-4 mr-2" />
+            Kilépés
+          </Button>
+          
+          {isHost && (
+            <Button
+              onClick={startGame}
+              disabled={loading || !selectedGame || members.length < 2}
+              className="flex-1 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-black h-12 rounded-xl font-semibold"
+            >
+              <Play className="h-4 w-4 mr-2" />
+              Játék indítása
+            </Button>
+          )}
+        </div>
 
-            {/* Members list */}
-            <div>
-              <Label className="mb-3">
-                {language === 'hu' ? 'Játékosok' : 'Players'} ({members.length}/{currentParty.max_players})
-              </Label>
-              <div className="space-y-2">
-                {members.map((member) => {
-                  const isMemberHost = member.user_id === currentParty.host_id;
-                  const memberReady = member.is_ready || isMemberHost;
+        {members.length < 2 && isHost && (
+          <p className="text-sm text-muted-foreground text-center">
+            Minimum 2 játékos szükséges a játék indításához
+          </p>
+        )}
 
-                  return (
-                    <div
-                      key={member.id}
-                      className={cn(
-                        'flex items-center justify-between p-3 rounded-xl border',
-                        memberReady
-                          ? 'bg-green-500/10 border-green-500/30'
-                          : 'bg-card/50 border-border/30'
-                      )}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center text-white font-bold">
-                          {member.profiles?.username?.charAt(0).toUpperCase() || '?'}
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <p className="font-semibold text-white">
-                              {member.profiles?.username || 'Unknown'}
-                            </p>
-                            {isMemberHost && (
-                              <Crown className="w-4 h-4 text-amber-400" />
-                            )}
-                          </div>
-                          {!isMemberHost && (
-                            <p className="text-xs text-muted-foreground">
-                              {memberReady
-                                ? (language === 'hu' ? 'Kész' : 'Ready')
-                                : (language === 'hu' ? 'Nem kész' : 'Not ready')}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                      {memberReady && !isMemberHost && (
-                        <Check className="w-5 h-5 text-green-400" />
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Ready/Start button */}
-            {!isHost && (
-              <Button
-                onClick={handleToggleReady}
-                variant={isReady ? 'outline' : 'default'}
-                className={cn(
-                  'w-full h-14 font-bold text-lg',
-                  isReady
-                    ? 'bg-transparent border-green-500/50 text-green-400 hover:bg-green-500/10'
-                    : 'bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-black'
-                )}
-              >
-                {isReady
-                  ? (language === 'hu' ? '✓ Kész vagyok' : '✓ Ready')
-                  : (language === 'hu' ? 'Kész vagyok' : 'Ready')}
-              </Button>
-            )}
-
-            {isHost && (
-              <div className="space-y-3">
-                {!allReady && (
-                  <p className="text-sm text-center text-muted-foreground">
-                    {language === 'hu'
-                      ? 'Várj, amíg mindenki készen áll...'
-                      : 'Waiting for everyone to be ready...'}
-                  </p>
-                )}
-                <Button
-                  onClick={handleStartGame}
-                  disabled={!canStart}
-                  className="w-full h-14 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-black font-bold text-lg gap-2 disabled:opacity-50"
-                >
-                  <Play className="w-5 h-5" />
-                  {language === 'hu' ? 'Játék indítása' : 'Start Game'}
-                </Button>
-              </div>
-            )}
-          </div>
-        </main>
+        {error && (
+          <p className="text-sm text-red-400 bg-red-500/10 p-3 rounded-xl text-center">
+            {error}
+          </p>
+        )}
       </div>
-    );
-  }
-
-  return null;
+    </div>
+  )
 }
