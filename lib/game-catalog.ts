@@ -51,7 +51,7 @@ export const GAMES: GameInfo[] = [
     difficulty: 1,
     rating: 4.8,
     ratingCount: 1250,
-    icon: "/icons/kings-cup.png",
+    icon: "/icons/kings-cup-new.png",
     isPopular: true,
   },
   {
@@ -71,7 +71,7 @@ export const GAMES: GameInfo[] = [
     difficulty: 2,
     rating: 4.6,
     ratingCount: 890,
-    icon: "/icons/ride-the-bus.png",
+    icon: "/icons/ride-the-bus-new.png",
     isPopular: true,
   },
   {
@@ -91,7 +91,7 @@ export const GAMES: GameInfo[] = [
     difficulty: 2,
     rating: 4.5,
     ratingCount: 720,
-    icon: "/icons/blackjack.png",
+    icon: "/icons/blackjack-new.png",
   },
   // Nem ivós (party) játékok
   {
@@ -111,7 +111,7 @@ export const GAMES: GameInfo[] = [
     difficulty: 1,
     rating: 4.7,
     ratingCount: 1100,
-    icon: "/icons/charades.jpg",
+    icon: "/icons/charades-new.png",
     isNew: true,
   },
   {
@@ -151,7 +151,7 @@ export const GAMES: GameInfo[] = [
     difficulty: 1,
     rating: 4.4,
     ratingCount: 650,
-    icon: "/icons/rating-game.jpg",
+    icon: "/icons/rating-game-new.png",
     isOnlineOnly: true,
     isNew: true,
   },

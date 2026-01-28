@@ -42,69 +42,52 @@ export function HomeScreenNew({
   };
 
   const filteredGames = getGamesByCategory(selectedCategory);
-
-  // Display games based on category
   const displayGames = filteredGames.slice(0, 6);
 
   return (
-    <div className="min-h-screen bg-background flex flex-col texture-overlay">
-      {/* Header with Logo */}
-      <header className="relative pt-6 pb-4 px-4 safe-area-top">
-        <div className="header-frame rounded-2xl p-6 relative overflow-hidden">
-          {/* Corner Ornaments */}
-          <div className="absolute top-3 left-3 w-6 h-6 border-t-2 border-l-2 border-gold opacity-50" />
-          <div className="absolute top-3 right-3 w-6 h-6 border-t-2 border-r-2 border-gold opacity-50" />
-          <div className="absolute bottom-3 left-3 w-6 h-6 border-b-2 border-l-2 border-gold opacity-50" />
-          <div className="absolute bottom-3 right-3 w-6 h-6 border-b-2 border-r-2 border-gold opacity-50" />
-          
-          {/* Background card suits */}
-          <div className="absolute inset-0 flex items-center justify-center opacity-5 pointer-events-none overflow-hidden">
-            <span className="text-[120px] text-gold tracking-[-0.2em]">
-              {"♠♥♣♦"}
-            </span>
-          </div>
+    <div className="min-h-screen bg-background flex flex-col">
+      {/* Texture overlay */}
+      <div className="fixed inset-0 pointer-events-none opacity-30 z-0" 
+        style={{ 
+          backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.4'/%3E%3C/svg%3E")`,
+        }} 
+      />
 
-          {/* Logo */}
-          <div className="relative z-10 flex flex-col items-center">
-            <div className="w-40 h-40 relative mb-2 animate-float">
-              <Image
-                src="/logo.png"
-                alt="Drunk Deck"
-                fill
-                className="object-contain drop-shadow-[0_0_20px_rgba(212,175,55,0.3)]"
-                priority
-              />
-            </div>
-            
-            {/* Decorative divider */}
-            <div className="flex items-center gap-3 mt-1">
-              <div className="w-12 h-[1px] bg-gradient-to-r from-transparent to-gold" />
-              <div className="diamond-icon" />
-              <div className="w-12 h-[1px] bg-gradient-to-l from-transparent to-gold" />
-            </div>
-          </div>
-        </div>
-
-        {/* Profile Button */}
+      {/* Header with Framed Logo */}
+      <header className="relative pt-4 pb-2 px-3 safe-area-top z-10">
+        {/* Profile Button - positioned absolutely */}
         {isOnline && onOpenProfile ? (
           <button
             onClick={onOpenProfile}
-            className="absolute top-10 right-6 w-10 h-10 rounded-full border-2 border-gold bg-background/80 flex items-center justify-center text-gold hover:bg-gold hover:text-background transition-all"
+            className="absolute top-6 right-4 z-20 w-10 h-10 rounded-full border-2 border-gold/60 bg-background/90 flex items-center justify-center text-gold hover:bg-gold hover:text-background transition-all shadow-lg"
           >
             <UserIcon className="w-5 h-5" />
           </button>
         ) : onLogin ? (
           <button
             onClick={onLogin}
-            className="absolute top-10 right-6 px-4 py-2 rounded-full border-2 border-gold bg-background/80 text-gold text-xs font-bold uppercase tracking-wider hover:bg-gold hover:text-background transition-all"
+            className="absolute top-6 right-4 z-20 px-3 py-1.5 rounded-full border-2 border-gold/60 bg-background/90 text-gold text-xs font-bold uppercase tracking-wider hover:bg-gold hover:text-background transition-all shadow-lg"
           >
             {language === "hu" ? "Belépés" : "Login"}
           </button>
         ) : null}
+
+        {/* Logo Image - full width with frame included */}
+        <div className="relative w-full max-w-sm mx-auto animate-float">
+          <div className="relative aspect-[1.6/1] w-full">
+            <Image
+              src="/images/logo-framed.png"
+              alt="Drunk Deck"
+              fill
+              className="object-contain drop-shadow-[0_4px_20px_rgba(212,175,55,0.4)]"
+              priority
+            />
+          </div>
+        </div>
       </header>
 
       {/* Category Filters */}
-      <div className="px-4 py-4">
+      <div className="px-4 py-3 z-10">
         <div className="flex gap-2 justify-center">
           {[
             {
@@ -124,8 +107,11 @@ export function HomeScreenNew({
               key={cat.id}
               onClick={() => setSelectedCategory(cat.id)}
               className={cn(
-                "category-pill",
-                selectedCategory === cat.id && "active",
+                "px-5 py-2 rounded-full text-xs font-bold uppercase tracking-wider transition-all duration-300",
+                "border-2",
+                selectedCategory === cat.id
+                  ? "bg-gold text-background border-gold shadow-[0_0_15px_rgba(212,175,55,0.5)]"
+                  : "bg-transparent text-gold/80 border-gold/40 hover:border-gold/70 hover:text-gold"
               )}
             >
               {cat.label}
@@ -135,8 +121,8 @@ export function HomeScreenNew({
       </div>
 
       {/* Game Grid */}
-      <main className="flex-1 px-4 pb-24 overflow-y-auto">
-        <div className="grid grid-cols-2 gap-4 max-w-lg mx-auto">
+      <main className="flex-1 px-3 pb-24 overflow-y-auto z-10">
+        <div className="grid grid-cols-2 gap-3 max-w-md mx-auto">
           {displayGames.map((game) => (
             <GameCard
               key={game.id}
@@ -149,31 +135,40 @@ export function HomeScreenNew({
       </main>
 
       {/* Bottom Navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 bottom-nav safe-area-bottom z-50">
+      <nav className="fixed bottom-0 left-0 right-0 z-50 bg-zinc-900/95 backdrop-blur-md border-t border-gold/20 safe-area-bottom">
         <div className="flex justify-around items-center h-16 max-w-lg mx-auto">
           <button
             onClick={() => setActiveTab("home")}
-            className={cn("nav-item", activeTab === "home" && "active")}
+            className={cn(
+              "flex flex-col items-center gap-1 px-6 py-2 transition-all",
+              activeTab === "home" ? "text-gold" : "text-zinc-500 hover:text-zinc-300"
+            )}
           >
-            <Home className="w-6 h-6" />
+            <Home className={cn("w-6 h-6", activeTab === "home" && "drop-shadow-[0_0_8px_rgba(212,175,55,0.8)]")} />
             <span className="text-xs font-semibold">Home</span>
           </button>
 
           <button
             onClick={() => setActiveTab("favorites")}
-            className={cn("nav-item", activeTab === "favorites" && "active")}
+            className={cn(
+              "flex flex-col items-center gap-1 px-6 py-2 transition-all",
+              activeTab === "favorites" ? "text-gold" : "text-zinc-500 hover:text-zinc-300"
+            )}
           >
             <Heart
-              className={cn("w-6 h-6", activeTab === "favorites" && "fill-current")}
+              className={cn("w-6 h-6", activeTab === "favorites" && "fill-current drop-shadow-[0_0_8px_rgba(212,175,55,0.8)]")}
             />
             <span className="text-xs font-semibold">Favorites</span>
           </button>
 
           <button
             onClick={() => setActiveTab("more")}
-            className={cn("nav-item", activeTab === "more" && "active")}
+            className={cn(
+              "flex flex-col items-center gap-1 px-6 py-2 transition-all",
+              activeTab === "more" ? "text-gold" : "text-zinc-500 hover:text-zinc-300"
+            )}
           >
-            <Menu className="w-6 h-6" />
+            <Menu className={cn("w-6 h-6", activeTab === "more" && "drop-shadow-[0_0_8px_rgba(212,175,55,0.8)]")} />
             <span className="text-xs font-semibold">More</span>
           </button>
         </div>
@@ -182,7 +177,7 @@ export function HomeScreenNew({
   );
 }
 
-// Game Card Component
+// Game Card Component - Full image with frame included
 interface GameCardProps {
   game: GameInfo;
   language: "hu" | "en";
@@ -190,65 +185,29 @@ interface GameCardProps {
 }
 
 function GameCard({ game, language, onSelect }: GameCardProps) {
-  const gameDisplayNames: Record<string, { hu: string; en: string }> = {
-    "kings-cup": { hu: "Tűzgyűrű", en: "Ring of Fire" },
-    "ride-the-bus": { hu: "Buszozás", en: "Bus Driver" },
-    "blackjack": { hu: "Blackjack", en: "Blackjack" },
-    "charades": { hu: "Homlokjáték", en: "Charades" },
-    "taboo": { hu: "Kategóriák", en: "Categories" },
-    "rating-game": { hu: "Igazságkör", en: "Truth Circle" },
-  };
-
-  const displayName = gameDisplayNames[game.id]?.[language] || 
-    (language === "hu" ? game.name : game.nameEn);
-
   return (
     <button
       onClick={onSelect}
-      className="game-card-frame p-3 text-left group transition-transform duration-200 hover:scale-[1.02] active:scale-[0.98]"
+      className="relative group transition-transform duration-200 hover:scale-[1.03] active:scale-[0.98]"
     >
-      {/* Card Image Area */}
-      <div className="relative aspect-square mb-3 rounded-lg overflow-hidden bg-gradient-to-br from-black via-zinc-900 to-black">
-        {/* Corner card suits */}
-        <div className="absolute top-2 left-2 text-gold/30 text-sm font-bold">{"♦"}</div>
-        <div className="absolute top-2 right-2 text-gold/30 text-sm font-bold">{"♦"}</div>
-        <div className="absolute bottom-2 left-2 text-gold/30 text-sm font-bold">{"♦"}</div>
-        <div className="absolute bottom-2 right-2 text-gold/30 text-sm font-bold">{"♦"}</div>
+      {/* Game Image - Full card with ornate frame included in image */}
+      <div className="relative aspect-square w-full rounded-lg overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.5)]">
+        <Image
+          src={game.icon}
+          alt={language === "hu" ? game.name : game.nameEn}
+          fill
+          className="object-cover"
+        />
         
-        {/* Inner border */}
-        <div className="absolute inset-2 border border-gold/20 rounded-md pointer-events-none" />
+        {/* Subtle shine effect on hover */}
+        <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/0 to-white/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
         
-        {/* Game icon/image */}
-        <div className="absolute inset-0 flex items-center justify-center">
-          {game.icon ? (
-            <div className="relative w-20 h-20 group-hover:scale-110 transition-transform">
-              <Image
-                src={game.icon}
-                alt={displayName}
-                fill
-                className="object-contain"
-              />
-            </div>
-          ) : (
-            <span className="text-5xl group-hover:scale-110 transition-transform">
-              {"🎮"}
-            </span>
-          )}
+        {/* Play button overlay on hover */}
+        <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+          <div className="w-14 h-14 rounded-full bg-gold/90 flex items-center justify-center shadow-lg transform scale-75 group-hover:scale-100 transition-transform duration-300">
+            <Play className="w-7 h-7 text-background fill-current ml-1" />
+          </div>
         </div>
-        
-        {/* Shine effect on hover */}
-        <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-gold/0 to-gold/10 opacity-0 group-hover:opacity-100 transition-opacity" />
-      </div>
-
-      {/* Game Title */}
-      <h3 className="text-golden text-center text-sm font-black uppercase tracking-wide mb-2 line-clamp-1">
-        {displayName}
-      </h3>
-
-      {/* Play Button */}
-      <div className="btn-gold rounded-md py-2 px-3 flex items-center justify-center gap-2 text-xs">
-        <Play className="w-3 h-3 fill-current" />
-        <span>{language === "hu" ? "JÁTÉK" : "PLAY"}</span>
       </div>
     </button>
   );
