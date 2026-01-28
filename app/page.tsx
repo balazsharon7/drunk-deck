@@ -181,7 +181,7 @@ function GameRouter() {
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="animate-spin w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full" />
+        <div className="animate-spin w-10 h-10 border-3 border-gold border-t-transparent rounded-full" />
       </div>
     );
   }
