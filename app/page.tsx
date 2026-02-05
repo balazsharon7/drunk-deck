@@ -9,6 +9,7 @@ import { AuthForm } from '@/components/auth-form';
 import { ProfileScreen } from '@/components/profile-screen';
 import { PartyLobby } from '@/components/party-lobby';
 import { KingsCup } from '@/components/games/kings-cup';
+import { KingsCupMultiplayer } from '@/components/games/kings-cup-multiplayer';
 import { RideTheBus } from '@/components/games/ride-the-bus';
 import { Blackjack } from '@/components/games/blackjack';
 import { Charades } from '@/components/games/charades';
@@ -30,6 +31,8 @@ function GameRouter() {
   const [isOnlineGame, setIsOnlineGame] = useState(false);
   const [loading, setLoading] = useState(true);
   const [selectedGame, setSelectedGame] = useState<GameInfo | null>(null);
+  const [partyId, setPartyId] = useState<string | null>(null);
+  const [partyMembers, setPartyMembers] = useState<Array<{ id: string; name: string; avatar: string; isHost: boolean }>>([]);
   
   const supabase = createClient();
 
@@ -148,13 +151,17 @@ function GameRouter() {
   const handlePartyStartGame = (gameType: GameType, partyIdParam: string, members: { user_id: string; profiles: { username: string } }[]) => {
     setCurrentGame(gameType);
     setIsOnlineGame(true);
+    setPartyId(partyIdParam);
     
     const partyPlayers = members.map((m, index) => ({
       id: m.user_id,
-      name: m.profiles?.username || `Játékos ${index + 1}`,
+      name: m.profiles?.username || `Jatekos ${index + 1}`,
+      avatar: ['🎮', '🎲', '🃏', '🍺', '🎯', '🎪', '🎭', '🎨'][index % 8],
+      isHost: index === 0,
       sips: 0,
     }));
     setPlayers(partyPlayers);
+    setPartyMembers(partyPlayers);
     
     setView('game');
   };
@@ -247,6 +254,20 @@ function GameRouter() {
 
   // Game views
   if (view === 'game' && currentGame) {
+    // Multiplayer Kings Cup
+    if (currentGame === 'kings-cup' && isOnlineGame && partyId && user) {
+      return (
+        <KingsCupMultiplayer
+          partyId={partyId}
+          playerId={user.id}
+          playerName={username || user.email?.split('@')[0] || 'Jatekos'}
+          isHost={partyMembers[0]?.id === user.id}
+          initialPlayers={partyMembers}
+          onBack={handleBack}
+        />
+      );
+    }
+    // Local Kings Cup
     if (currentGame === 'kings-cup') {
       return <KingsCup onBack={handleBack} />;
     }
