@@ -131,7 +131,7 @@ export const GAMES: GameInfo[] = [
     difficulty: 2,
     rating: 4.9,
     ratingCount: 980,
-    icon: "/icons/barlangnyelv.png",
+    icon: "/icons/barlangnyelv-new.png",
     isPopular: true,
   },
   {
