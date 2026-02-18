@@ -5,7 +5,7 @@ import { useGame } from "@/lib/game-context";
 import { GAMES, GameInfo } from "@/lib/game-catalog";
 import type { User } from "@supabase/supabase-js";
 import Image from "next/image";
-import { Home, Heart, Menu, Play, User as UserIcon } from "lucide-react";
+import { Home, Heart, Menu, Play, User as UserIcon, Users, Crown } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface HomeScreenNewProps {
@@ -23,12 +23,13 @@ export function HomeScreenNew({
   onSelectGame,
   onOpenProfile,
   onLogin,
+  onOpenParty,
   isOnline,
 }: HomeScreenNewProps) {
   const { language } = useGame();
   const [selectedCategory, setSelectedCategory] =
     useState<CategoryFilter>("all");
-  const [activeTab, setActiveTab] = useState<"home" | "favorites" | "more">(
+  const [activeTab, setActiveTab] = useState<"home" | "party" | "more">(
     "home",
   );
 
@@ -55,7 +56,7 @@ export function HomeScreenNew({
 
       {/* Header with Framed Logo */}
       <header className="relative pt-4 pb-2 px-3 safe-area-top z-10">
-        {/* Profile Button - positioned absolutely */}
+        {/* Profile Button */}
         {isOnline && onOpenProfile ? (
           <button
             onClick={onOpenProfile}
@@ -68,11 +69,11 @@ export function HomeScreenNew({
             onClick={onLogin}
             className="absolute top-6 right-4 z-20 px-3 py-1.5 rounded-full border-2 border-gold/60 bg-background/90 text-gold text-xs font-bold uppercase tracking-wider hover:bg-gold hover:text-background transition-all shadow-lg"
           >
-            {language === "hu" ? "Belépés" : "Login"}
+            {language === "hu" ? "Belepes" : "Login"}
           </button>
         ) : null}
 
-        {/* Logo Image - full width with frame included */}
+        {/* Logo Image */}
         <div className="relative w-full max-w-sm mx-auto animate-float">
           <div className="relative aspect-[1.6/1] w-full">
             <Image
@@ -85,6 +86,30 @@ export function HomeScreenNew({
           </div>
         </div>
       </header>
+
+      {/* Online Party Banner */}
+      {onOpenParty && (
+        <div className="px-4 pb-2 z-10">
+          <button
+            onClick={onOpenParty}
+            className="w-full relative overflow-hidden rounded-xl border-2 border-gold/50 bg-gradient-to-r from-gold/15 via-gold/5 to-gold/15 p-3 flex items-center justify-center gap-3 group hover:border-gold/80 transition-all active:scale-[0.98]"
+          >
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-gold/10 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000" />
+            <div className="w-10 h-10 rounded-full bg-gold/20 border border-gold/40 flex items-center justify-center">
+              <Crown className="w-5 h-5 text-gold" />
+            </div>
+            <div className="text-left">
+              <p className="text-gold font-bold text-sm tracking-wide">
+                {language === "hu" ? "ONLINE PARTY" : "ONLINE PARTY"}
+              </p>
+              <p className="text-gold/60 text-xs">
+                {language === "hu" ? "Jatssz az ismeroseiddel!" : "Play with friends!"}
+              </p>
+            </div>
+            <Users className="w-5 h-5 text-gold/60 ml-auto" />
+          </button>
+        </div>
+      )}
 
       {/* Category Filters */}
       <div className="px-4 py-3 z-10">
@@ -149,16 +174,21 @@ export function HomeScreenNew({
           </button>
 
           <button
-            onClick={() => setActiveTab("favorites")}
+            onClick={() => {
+              setActiveTab("party");
+              if (onOpenParty) {
+                onOpenParty();
+              } else if (onLogin) {
+                onLogin();
+              }
+            }}
             className={cn(
-              "flex flex-col items-center gap-1 px-6 py-2 transition-all",
-              activeTab === "favorites" ? "text-gold" : "text-zinc-500 hover:text-zinc-300"
+              "flex flex-col items-center gap-1 px-6 py-2 transition-all relative",
+              activeTab === "party" ? "text-gold" : "text-zinc-500 hover:text-zinc-300"
             )}
           >
-            <Heart
-              className={cn("w-6 h-6", activeTab === "favorites" && "fill-current drop-shadow-[0_0_8px_rgba(212,175,55,0.8)]")}
-            />
-            <span className="text-xs font-semibold">Favorites</span>
+            <Users className={cn("w-6 h-6", activeTab === "party" && "drop-shadow-[0_0_8px_rgba(212,175,55,0.8)]")} />
+            <span className="text-xs font-semibold">Party</span>
           </button>
 
           <button
@@ -177,7 +207,7 @@ export function HomeScreenNew({
   );
 }
 
-// Game Card Component - Full image with frame included
+// Game Card Component
 interface GameCardProps {
   game: GameInfo;
   language: "hu" | "en";
@@ -190,7 +220,6 @@ function GameCard({ game, language, onSelect }: GameCardProps) {
       onClick={onSelect}
       className="relative group transition-transform duration-200 hover:scale-[1.03] active:scale-[0.98]"
     >
-      {/* Game Image - Full card with ornate frame included in image */}
       <div className="relative aspect-square w-full rounded-lg overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.5)]">
         <Image
           src={game.icon}
@@ -199,7 +228,7 @@ function GameCard({ game, language, onSelect }: GameCardProps) {
           className="object-cover"
         />
         
-        {/* Subtle shine effect on hover */}
+        {/* Shine effect on hover */}
         <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/0 to-white/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
         
         {/* Play button overlay on hover */}

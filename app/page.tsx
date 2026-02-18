@@ -109,9 +109,12 @@ function GameRouter() {
   };
 
   const handleGoOnline = () => {
+    console.log("[v0] handleGoOnline called, user:", !!user, "isOnlineMode:", isOnlineMode);
     if (user) {
+      console.log("[v0] Navigating to party view");
       setView('party');
     } else {
+      console.log("[v0] No user, navigating to auth");
       setView('auth');
     }
   };
@@ -230,6 +233,7 @@ function GameRouter() {
   }
 
   // Party lobby view
+  console.log("[v0] Current view:", view, "user:", !!user);
   if (view === 'party' && user) {
     return (
       <PartyLobby
@@ -294,7 +298,7 @@ function GameRouter() {
       onSelectGame={handleSelectGame}
       onOpenProfile={isOnlineMode ? handleOpenProfile : undefined}
       onLogin={!isOnlineMode ? handleLogin : undefined}
-      onOpenParty={isOnlineMode ? handleGoOnline : undefined}
+      onOpenParty={handleGoOnline}
       isOnline={isOnlineMode}
       user={user}
     />
