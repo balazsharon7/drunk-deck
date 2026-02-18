@@ -1,29 +1,26 @@
-'use client';
+"use client";
 
-import { useState, useEffect, useCallback } from 'react';
-import { useGame } from '@/lib/game-context';
-import { createClient } from '@/lib/supabase/client';
-import { GAMES, GameInfo } from '@/lib/game-catalog';
-import type { GameType } from '@/lib/game-types';
-import { 
-  ArrowLeft, 
-  Users, 
-  Copy, 
-  Check, 
-  Crown, 
+import { useState, useEffect, useCallback } from "react";
+import { useGame } from "@/lib/game-context";
+import { createClient } from "@/lib/supabase/client";
+import { GAMES, GameInfo } from "@/lib/game-catalog";
+import type { GameType } from "@/lib/game-types";
+import {
+  ArrowLeft,
+  Users,
+  Copy,
+  Check,
+  Crown,
   UserPlus,
   Play,
   RefreshCw,
   Share2,
-  Gamepad2,
   Sparkles,
-  X,
-  ChevronRight,
+  Wifi,
   QrCode,
-  Wifi
-} from 'lucide-react';
-import { cn } from '@/lib/utils';
-import Image from 'next/image';
+} from "lucide-react";
+import Image from "next/image";
+import { motion, AnimatePresence } from "framer-motion";
 
 interface PartyLobbyProps {
   userId: string;
@@ -31,7 +28,6 @@ interface PartyLobbyProps {
   onStartGame: (gameType: GameType, partyId: string, members: any[]) => void;
   onLeave: () => void;
 }
-
 interface Party {
   id: string;
   code: string;
@@ -41,169 +37,405 @@ interface Party {
   status: string;
   max_players: number;
 }
-
 interface PartyMember {
   id: string;
   user_id: string;
   is_ready: boolean;
-  profiles: {
-    username: string;
-    avatar_url?: string;
-  };
+  profiles: { username: string; avatar_url?: string };
 }
 
-// ---- Shared Sub-Components ----
+// ── Shared UI ──
+
+function BG() {
+  return (
+    <>
+      <div className="fixed inset-0 z-0">
+        <Image
+          src="/images/hatter.png"
+          alt="bg"
+          fill
+          className="object-cover"
+          priority
+        />
+        <div className="absolute inset-0 bg-gradient-to-b from-black/75 via-black/55 to-black/88" />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#1a0800]/85 via-transparent to-transparent" />
+      </div>
+      <div
+        className="fixed inset-0 z-[1] pointer-events-none opacity-[0.04]"
+        style={{
+          backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E")`,
+          backgroundRepeat: "repeat",
+          backgroundSize: "128px",
+        }}
+      />
+    </>
+  );
+}
 
 function GoldDivider() {
   return (
-    <div className="flex items-center gap-2 my-2">
-      <div className="flex-1 h-px bg-gradient-to-r from-transparent to-gold/25" />
-      <span className="text-gold text-[10px] opacity-60">&#9670;</span>
-      <div className="flex-1 h-px bg-gradient-to-l from-transparent to-gold/25" />
+    <div className="flex items-center gap-2 my-3">
+      <div
+        className="flex-1 h-px"
+        style={{
+          background:
+            "linear-gradient(90deg, transparent, rgba(255,185,0,0.35))",
+        }}
+      />
+      <span className="text-[10px]" style={{ color: "rgba(255,185,0,0.5)" }}>
+        ◆
+      </span>
+      <div
+        className="flex-1 h-px"
+        style={{
+          background:
+            "linear-gradient(270deg, transparent, rgba(255,185,0,0.35))",
+        }}
+      />
     </div>
   );
 }
 
-function Avatar({ name, size = 40 }: { name: string; size?: number }) {
-  const colors = ['#8B0000', '#1a3a6b', '#1a4a1a', '#4a1a6b', '#4a3a00', '#2a4a1a'];
-  const c = colors[(name?.charCodeAt(0) || 0) % colors.length];
-  return (
-    <div
-      className="rounded-full border-2 border-gold/30 flex items-center justify-center font-extrabold text-white shrink-0"
-      style={{
-        width: size,
-        height: size,
-        fontSize: size * 0.4,
-        background: `linear-gradient(135deg, ${c}, ${c}88)`,
-      }}
-    >
-      {name?.[0]?.toUpperCase() || '?'}
-    </div>
-  );
-}
-
-function BackBtn({ onClick, label = 'Vissza' }: { onClick: () => void; label?: string }) {
+function BackBtn({
+  onClick,
+  label = "Vissza",
+}: {
+  onClick: () => void;
+  label?: string;
+}) {
   return (
     <button
       onClick={onClick}
-      className="flex items-center gap-1.5 text-gold text-sm font-medium bg-transparent border-none cursor-pointer py-1"
+      className="flex items-center gap-2 px-3 py-2 rounded-xl z-10"
+      style={{
+        background: "rgba(15,6,0,0.55)",
+        border: "1px solid rgba(255,185,0,0.3)",
+        backdropFilter: "blur(8px)",
+      }}
     >
-      <ArrowLeft className="w-4 h-4" />
-      {label}
+      <ArrowLeft className="w-4 h-4 text-[#FFD700]" />
+      <span
+        className="text-sm font-bold text-[#FFD700]"
+        style={{ fontFamily: "'Cinzel', serif" }}
+      >
+        {label}
+      </span>
     </button>
   );
 }
 
-function GoldButton({
+function ScreenTitle({ label }: { label: string }) {
+  return (
+    <h1
+      className="text-base font-black tracking-widest absolute left-1/2 -translate-x-1/2"
+      style={{
+        fontFamily: "'Cinzel', serif",
+        background:
+          "linear-gradient(180deg, #FFE566 0%, #FFB300 60%, #CC8800 100%)",
+        WebkitBackgroundClip: "text",
+        WebkitTextFillColor: "transparent",
+      }}
+    >
+      {label}
+    </h1>
+  );
+}
+
+function GCard({
+  children,
+  className = "",
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div
+      className={`rounded-2xl p-4 ${className}`}
+      style={{
+        background: "rgba(15,6,0,0.55)",
+        border: "1px solid rgba(255,185,0,0.2)",
+        backdropFilter: "blur(12px)",
+        boxShadow: "0 4px 24px rgba(0,0,0,0.4)",
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function GoldLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <p
+      className="text-[10px] font-black tracking-[0.35em] mb-2"
+      style={{ fontFamily: "'Cinzel', serif", color: "rgba(255,185,0,0.55)" }}
+    >
+      {children}
+    </p>
+  );
+}
+
+function PrimaryBtn({
   children,
   onClick,
   disabled = false,
-  variant = 'gold',
-  className: extraClass,
 }: {
   children: React.ReactNode;
   onClick?: () => void;
   disabled?: boolean;
-  variant?: 'gold' | 'outline' | 'ghost' | 'danger' | 'success';
-  className?: string;
 }) {
-  const base =
-    'w-full py-4 px-5 rounded-2xl border-none cursor-pointer text-[15px] font-bold tracking-wide transition-all flex items-center justify-center gap-2';
-  const variants: Record<string, string> = {
-    gold: 'bg-gradient-to-br from-gold-light via-gold to-gold-dark text-black shadow-[0_4px_20px_rgba(212,175,55,0.25)]',
-    outline: 'bg-transparent text-gold border-[1.5px] border-gold/30',
-    ghost: 'bg-secondary text-white border border-border',
-    danger: 'bg-destructive/10 text-destructive border border-destructive/30',
-    success: 'bg-green-500/10 text-green-500 border border-green-500/30',
-  };
-
   return (
-    <button
-      onClick={disabled ? undefined : onClick}
-      disabled={disabled}
-      className={cn(base, variants[variant], disabled && 'opacity-40 cursor-not-allowed', extraClass)}
-    >
-      {children}
-    </button>
-  );
-}
-
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="text-muted-foreground text-[11px] tracking-widest uppercase mb-2">
-      {children}
+    <div className="flex flex-col items-center gap-1.5 w-full">
+      <button
+        onClick={disabled ? undefined : onClick}
+        disabled={disabled}
+        className="relative w-full py-[14px] flex items-center justify-center gap-2 transition-all"
+        style={{
+          borderRadius: "12px",
+          background: disabled
+            ? "rgba(30,15,0,0.35)"
+            : "linear-gradient(180deg, #1a0a00 0%, #0d0500 100%)",
+          border: `1px solid ${disabled ? "rgba(255,185,0,0.15)" : "rgba(255,185,0,0.55)"}`,
+          boxShadow: disabled
+            ? "none"
+            : "0 0 18px rgba(255,160,0,0.2), inset 0 1px 0 rgba(255,200,80,0.12)",
+          cursor: disabled ? "not-allowed" : "pointer",
+          opacity: disabled ? 0.5 : 1,
+        }}
+      >
+        <span
+          className="font-black tracking-[0.35em] text-sm"
+          style={{
+            fontFamily: "'Cinzel', serif",
+            background: disabled
+              ? "none"
+              : "linear-gradient(180deg, #FFE566 0%, #FFB300 60%, #CC8800 100%)",
+            WebkitBackgroundClip: disabled ? "none" : "text",
+            WebkitTextFillColor: disabled
+              ? "rgba(255,185,0,0.3)"
+              : "transparent",
+          }}
+        >
+          {children}
+        </span>
+      </button>
     </div>
   );
 }
 
-// ---- Main Component ----
+function OutlineBtn({
+  children,
+  onClick,
+  red = false,
+}: {
+  children: React.ReactNode;
+  onClick?: () => void;
+  red?: boolean;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="w-full py-[13px] flex items-center justify-center gap-2 rounded-xl transition-all"
+      style={{
+        background: red ? "rgba(180,30,30,0.1)" : "rgba(255,185,0,0.06)",
+        border: `1px solid ${red ? "rgba(180,30,30,0.35)" : "rgba(255,185,0,0.25)"}`,
+        backdropFilter: "blur(8px)",
+      }}
+    >
+      <span
+        className="text-sm font-black tracking-widest"
+        style={{
+          fontFamily: "'Cinzel', serif",
+          color: red ? "#f87171" : "#FFD700",
+        }}
+      >
+        {children}
+      </span>
+    </button>
+  );
+}
 
-export function PartyLobby({ userId, username, onStartGame, onLeave }: PartyLobbyProps) {
+function MemberRow({
+  m,
+  isHost,
+  isMe,
+}: {
+  m: PartyMember;
+  isHost: boolean;
+  isMe: boolean;
+}) {
+  const ready = m.is_ready || isHost;
+  return (
+    <div className="flex items-center gap-3 py-1">
+      <div
+        className="w-9 h-9 rounded-full flex items-center justify-center font-black text-sm flex-shrink-0"
+        style={{
+          background: "rgba(10,4,0,0.7)",
+          border: "1px solid rgba(255,185,0,0.35)",
+          color: "#FFD700",
+        }}
+      >
+        {m.profiles?.username?.[0]?.toUpperCase() || "?"}
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5">
+          <span
+            className="text-sm font-bold truncate"
+            style={{ color: "#FFE8A0" }}
+          >
+            {m.profiles?.username || "Unknown"}
+          </span>
+          {isHost && (
+            <span
+              className="text-[9px] font-black px-1.5 py-0.5 rounded"
+              style={{
+                background: "rgba(255,185,0,0.15)",
+                border: "1px solid rgba(255,185,0,0.3)",
+                color: "#FFD700",
+                fontFamily: "'Cinzel', serif",
+              }}
+            >
+              HOST
+            </span>
+          )}
+          {isMe && !isHost && (
+            <span
+              className="text-[9px] px-1.5 py-0.5 rounded"
+              style={{
+                color: "rgba(255,185,0,0.5)",
+                fontFamily: "'Cinzel', serif",
+              }}
+            >
+              TE
+            </span>
+          )}
+        </div>
+        <p
+          className="text-[10px] mt-0.5"
+          style={{ color: ready ? "#4ade80" : "rgba(255,185,0,0.35)" }}
+        >
+          {isHost ? "Gazda" : ready ? "Kész" : "Vár..."}
+        </p>
+      </div>
+      {isHost && <Crown className="w-4 h-4 text-[#FFD700] flex-shrink-0" />}
+      {ready && !isHost && (
+        <Check className="w-4 h-4 text-green-400 flex-shrink-0" />
+      )}
+    </div>
+  );
+}
+
+// ── Main ──
+
+export function PartyLobby({
+  userId,
+  username,
+  onStartGame,
+  onLeave,
+}: PartyLobbyProps) {
   const { language } = useGame();
-  const t = language === 'hu';
+  const t = language === "hu";
 
-  const [view, setView] = useState<'menu' | 'create-setup' | 'create-invite' | 'create-lobby' | 'join' | 'guest-lobby'>('menu');
-  const [partyName, setPartyName] = useState('');
-  const [selectedGameId, setSelectedGameId] = useState<string>('kings-cup');
+  const [view, setView] = useState<
+    | "menu"
+    | "create-setup"
+    | "create-invite"
+    | "create-lobby"
+    | "join"
+    | "guest-lobby"
+  >("menu");
+  const [partyName, setPartyName] = useState("");
+  const [selectedGameId, setSelectedGameId] = useState<string>("kings-cup");
   const [currentParty, setCurrentParty] = useState<Party | null>(null);
   const [members, setMembers] = useState<PartyMember[]>([]);
   const [isReady, setIsReady] = useState(false);
   const [copied, setCopied] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [joinCode, setJoinCode] = useState('');
+  const [error, setError] = useState("");
+  const [joinCode, setJoinCode] = useState("");
   const [foundParty, setFoundParty] = useState<Party | null>(null);
   const [searching, setSearching] = useState(false);
-  const [showGameSelector, setShowGameSelector] = useState(false);
 
   const supabase = createClient();
   const isHost = currentParty?.host_id === userId;
-  const allReady = members.every(m => m.is_ready || m.user_id === currentParty?.host_id);
+  const allReady = members.every(
+    (m) => m.is_ready || m.user_id === currentParty?.host_id,
+  );
   const canStart = isHost && members.length >= 2 && allReady;
 
   const loadMembers = useCallback(async () => {
     if (!currentParty) return;
     const { data } = await supabase
-      .from('party_members')
-      .select('id, user_id, is_ready, profiles (username, avatar_url)')
-      .eq('party_id', currentParty.id);
+      .from("party_members")
+      .select("id,user_id,is_ready,profiles(username,avatar_url)")
+      .eq("party_id", currentParty.id);
     if (data) setMembers(data as PartyMember[]);
   }, [currentParty, supabase]);
 
-  // Realtime subscription
   useEffect(() => {
     if (!currentParty) return;
     const channel = supabase
       .channel(`party:${currentParty.id}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'party_members', filter: `party_id=eq.${currentParty.id}` }, () => loadMembers())
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'parties', filter: `id=eq.${currentParty.id}` }, (payload) => {
-        const updated = payload.new as Party;
-        setCurrentParty(updated);
-        if (updated.status === 'playing') onStartGame(updated.game_type as GameType, updated.id, members);
-      })
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "party_members",
+          filter: `party_id=eq.${currentParty.id}`,
+        },
+        () => loadMembers(),
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "parties",
+          filter: `id=eq.${currentParty.id}`,
+        },
+        (payload) => {
+          const updated = payload.new as Party;
+          setCurrentParty(updated);
+          if (updated.status === "playing")
+            onStartGame(updated.game_type as GameType, updated.id, members);
+        },
+      )
       .subscribe();
     loadMembers();
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [currentParty, supabase, onStartGame, members, loadMembers]);
 
-  // ---- Handlers ----
   const handleCreateParty = async () => {
-    if (!partyName.trim()) { setError(t ? 'Add meg a party nevet!' : 'Enter party name!'); return; }
+    if (!partyName.trim()) {
+      setError(t ? "Add meg a party nevet!" : "Enter party name!");
+      return;
+    }
     setLoading(true);
-    setError('');
+    setError("");
     try {
       const code = Math.random().toString(36).substring(2, 8).toUpperCase();
-      const { data: party, error: partyError } = await supabase
-        .from('parties')
-        .insert({ code, name: partyName, host_id: userId, game_type: selectedGameId, status: 'waiting', max_players: 10 })
+      const { data: party, error: pe } = await supabase
+        .from("parties")
+        .insert({
+          code,
+          name: partyName,
+          host_id: userId,
+          game_type: selectedGameId,
+          status: "waiting",
+          max_players: 10,
+        })
         .select()
         .single();
-      if (partyError) throw partyError;
-      await supabase.from('party_members').insert({ party_id: party.id, user_id: userId, is_ready: true });
+      if (pe) throw pe;
+      await supabase
+        .from("party_members")
+        .insert({ party_id: party.id, user_id: userId, is_ready: true });
       setCurrentParty(party);
-      setView('create-invite');
+      setView("create-invite");
     } catch {
-      setError(t ? 'Hiba a party letrehozasakor' : 'Error creating party');
+      setError(t ? "Hiba a party létrehozásakor" : "Error creating party");
     } finally {
       setLoading(false);
     }
@@ -213,18 +445,21 @@ export function PartyLobby({ userId, username, onStartGame, onLeave }: PartyLobb
     if (joinCode.length !== 6) return;
     setSearching(true);
     setFoundParty(null);
-    setError('');
+    setError("");
     try {
       const { data: party } = await supabase
-        .from('parties')
+        .from("parties")
         .select()
-        .eq('code', joinCode.toUpperCase())
-        .eq('status', 'waiting')
+        .eq("code", joinCode.toUpperCase())
+        .eq("status", "waiting")
         .single();
-      if (!party) { setError(t ? 'Party nem talalhato!' : 'Party not found!'); return; }
+      if (!party) {
+        setError(t ? "Party nem található!" : "Party not found!");
+        return;
+      }
       setFoundParty(party);
     } catch {
-      setError(t ? 'Party nem talalhato!' : 'Party not found!');
+      setError(t ? "Party nem található!" : "Party not found!");
     } finally {
       setSearching(false);
     }
@@ -234,19 +469,24 @@ export function PartyLobby({ userId, username, onStartGame, onLeave }: PartyLobb
     if (!foundParty) return;
     setLoading(true);
     try {
-      const { data: existing } = await supabase
-        .from('party_members')
+      const { data: ex } = await supabase
+        .from("party_members")
         .select()
-        .eq('party_id', foundParty.id)
-        .eq('user_id', userId)
+        .eq("party_id", foundParty.id)
+        .eq("user_id", userId)
         .single();
-      if (!existing) {
-        await supabase.from('party_members').insert({ party_id: foundParty.id, user_id: userId, is_ready: false });
-      }
+      if (!ex)
+        await supabase
+          .from("party_members")
+          .insert({
+            party_id: foundParty.id,
+            user_id: userId,
+            is_ready: false,
+          });
       setCurrentParty(foundParty);
-      setView('guest-lobby');
+      setView("guest-lobby");
     } catch {
-      setError(t ? 'Hiba a csatlakozaskor' : 'Error joining');
+      setError(t ? "Hiba a csatlakozáskor" : "Error joining");
     } finally {
       setLoading(false);
     }
@@ -256,541 +496,970 @@ export function PartyLobby({ userId, username, onStartGame, onLeave }: PartyLobb
     if (!currentParty || isHost) return;
     const next = !isReady;
     setIsReady(next);
-    await supabase.from('party_members').update({ is_ready: next }).eq('party_id', currentParty.id).eq('user_id', userId);
+    await supabase
+      .from("party_members")
+      .update({ is_ready: next })
+      .eq("party_id", currentParty.id)
+      .eq("user_id", userId);
   };
 
   const handleSelectGame = async (gameId: string) => {
     if (!currentParty || !isHost) return;
-    await supabase.from('parties').update({ game_type: gameId }).eq('id', currentParty.id);
+    await supabase
+      .from("parties")
+      .update({ game_type: gameId })
+      .eq("id", currentParty.id);
     setCurrentParty({ ...currentParty, game_type: gameId });
     setSelectedGameId(gameId);
-    setShowGameSelector(false);
   };
 
   const handleStartGame = async () => {
     if (!currentParty || !canStart) return;
-    await supabase.from('parties').update({ status: 'playing' }).eq('id', currentParty.id);
+    await supabase
+      .from("parties")
+      .update({ status: "playing" })
+      .eq("id", currentParty.id);
   };
 
   const handleLeaveParty = async () => {
     if (!currentParty) return;
-    await supabase.from('party_members').delete().eq('party_id', currentParty.id).eq('user_id', userId);
-    if (isHost) await supabase.from('parties').delete().eq('id', currentParty.id);
+    await supabase
+      .from("party_members")
+      .delete()
+      .eq("party_id", currentParty.id)
+      .eq("user_id", userId);
+    if (isHost)
+      await supabase.from("parties").delete().eq("id", currentParty.id);
     setCurrentParty(null);
     setMembers([]);
     setIsReady(false);
-    setView('menu');
+    setView("menu");
   };
 
   const copyCode = async () => {
     if (!currentParty) return;
     try {
       await navigator.clipboard.writeText(currentParty.code);
-    } catch { /* fallback */ }
+    } catch {}
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
   const shareParty = async () => {
     if (!currentParty) return;
-    const shareData = {
-      title: 'Drunk Deck Party',
-      text: t ? `Csatlakozz: "${currentParty.name}" - Kod: ${currentParty.code}` : `Join "${currentParty.name}" - Code: ${currentParty.code}`,
+    const sd = {
+      title: "Drunk Deck Party",
+      text: t
+        ? `Csatlakozz: "${currentParty.name}" - Kód: ${currentParty.code}`
+        : `Join "${currentParty.name}" - Code: ${currentParty.code}`,
       url: `${window.location.origin}?party=${currentParty.code}`,
     };
     if (navigator.share) {
-      try { await navigator.share(shareData); } catch { copyCode(); }
+      try {
+        await navigator.share(sd);
+      } catch {
+        copyCode();
+      }
     } else {
       copyCode();
     }
   };
 
-  // ==========================
-  // MENU VIEW
-  // ==========================
-  if (view === 'menu') {
+  // ══ MENU ══
+  if (view === "menu")
     return (
-      <div className="min-h-screen bg-background flex flex-col">
-        {/* Header */}
-        <div className="p-4 pb-5 border-b border-gold/10">
-          <div className="flex justify-between items-center">
-            <BackBtn onClick={onLeave} />
-            <div className="flex items-center gap-2">
-              <Avatar name={username} size={32} />
-              <span className="text-white text-sm font-semibold">{username}</span>
+      <div className="min-h-screen flex flex-col relative overflow-hidden safe-area-top safe-area-bottom">
+        <BG />
+        <header className="relative z-10 flex items-center justify-between px-4 pt-5 pb-3">
+          <BackBtn onClick={onLeave} label={t ? "Vissza" : "Back"} />
+          <ScreenTitle label="ONLINE PARTY" />
+          <div className="flex items-center gap-2 z-10">
+            <div
+              className="w-8 h-8 rounded-full flex items-center justify-center font-black text-xs"
+              style={{
+                background: "rgba(10,4,0,0.7)",
+                border: "1px solid rgba(255,185,0,0.35)",
+                color: "#FFD700",
+              }}
+            >
+              {username[0]?.toUpperCase()}
             </div>
           </div>
-          <div className="mt-5">
-            <h2 className="text-white text-2xl font-extrabold m-0">Lobby</h2>
-            <p className="text-muted-foreground text-sm mt-1 m-0">{t ? 'Jatssz barataiddal online' : 'Play with friends online'}</p>
-          </div>
+        </header>
+
+        <main className="flex-1 px-4 pb-10 z-10 flex flex-col gap-4 pt-2">
+          {/* Create card */}
+          <motion.button
+            onClick={() => setView("create-setup")}
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+            className="relative overflow-hidden text-left active:scale-[0.98] transition-all w-full"
+            style={{
+              borderRadius: "20px",
+              background: "rgba(15,6,0,0.6)",
+              border: "1px solid rgba(255,185,0,0.3)",
+              backdropFilter: "blur(12px)",
+              boxShadow: "0 0 30px rgba(255,160,0,0.1)",
+            }}
+          >
+            <div
+              className="absolute top-0 right-0 w-32 h-32 rounded-full pointer-events-none"
+              style={{
+                background:
+                  "radial-gradient(circle, rgba(255,185,0,0.08) 0%, transparent 70%)",
+                transform: "translate(30%, -30%)",
+              }}
+            />
+            <div className="p-5">
+              <div
+                className="w-10 h-10 rounded-xl flex items-center justify-center mb-4"
+                style={{
+                  background: "rgba(255,185,0,0.1)",
+                  border: "1px solid rgba(255,185,0,0.25)",
+                }}
+              >
+                <Sparkles className="w-5 h-5 text-[#FFD700]" />
+              </div>
+              <p
+                className="font-black text-lg tracking-wider mb-1.5"
+                style={{
+                  fontFamily: "'Cinzel', serif",
+                  background: "linear-gradient(90deg, #FFE566, #FFB300)",
+                  WebkitBackgroundClip: "text",
+                  WebkitTextFillColor: "transparent",
+                }}
+              >
+                {t ? "PARTI LÉTREHOZÁSA" : "CREATE PARTY"}
+              </p>
+              <p
+                className="text-sm leading-relaxed"
+                style={{ color: "rgba(255,220,150,0.6)" }}
+              >
+                {t
+                  ? "Hívj meg barátokat linkkel vagy 6 jegyű kóddal. Te választod a játékot."
+                  : "Invite friends with a link or 6-digit code. You choose the game."}
+              </p>
+            </div>
+          </motion.button>
+
+          {/* Join card */}
+          <motion.button
+            onClick={() => setView("join")}
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+            className="relative overflow-hidden text-left active:scale-[0.98] transition-all w-full"
+            style={{
+              borderRadius: "20px",
+              background: "rgba(15,6,0,0.45)",
+              border: "1px solid rgba(255,185,0,0.15)",
+              backdropFilter: "blur(12px)",
+            }}
+          >
+            <div className="p-5">
+              <div
+                className="w-10 h-10 rounded-xl flex items-center justify-center mb-4"
+                style={{
+                  background: "rgba(255,185,0,0.07)",
+                  border: "1px solid rgba(255,185,0,0.15)",
+                }}
+              >
+                <UserPlus className="w-5 h-5 text-[#FFD700]" />
+              </div>
+              <p
+                className="font-black text-lg tracking-wider mb-1.5"
+                style={{ fontFamily: "'Cinzel', serif", color: "#FFE8A0" }}
+              >
+                {t ? "CSATLAKOZÁS" : "JOIN PARTY"}
+              </p>
+              <p
+                className="text-sm leading-relaxed"
+                style={{ color: "rgba(255,220,150,0.5)" }}
+              >
+                {t
+                  ? "Add meg a 6 jegyű kódot amit a parti gazdájától kaptál."
+                  : "Enter the 6-digit code you got from the party host."}
+              </p>
+            </div>
+          </motion.button>
+        </main>
+      </div>
+    );
+
+  // ══ CREATE SETUP ══
+  if (view === "create-setup")
+    return (
+      <div className="min-h-screen flex flex-col relative overflow-hidden safe-area-top safe-area-bottom">
+        <BG />
+        <header className="relative z-10 flex items-center justify-between px-4 pt-5 pb-3">
+          <BackBtn
+            onClick={() => setView("menu")}
+            label={t ? "Vissza" : "Back"}
+          />
+          <ScreenTitle label={t ? "ÚJ PARTI" : "NEW PARTY"} />
+          <div className="w-20" />
+        </header>
+
+        <main className="flex-1 overflow-y-auto px-4 pb-32 z-10 space-y-4 pt-2">
+          {/* Party name */}
+          <motion.div
+            initial={{ opacity: 0, y: 14 }}
+            animate={{ opacity: 1, y: 0 }}
+          >
+            <GCard>
+              <GoldLabel>{t ? "PARTI NEVE" : "PARTY NAME"}</GoldLabel>
+              <div
+                className="h-px mb-3"
+                style={{
+                  background:
+                    "linear-gradient(90deg, rgba(255,185,0,0.35), transparent)",
+                }}
+              />
+              <input
+                value={partyName}
+                onChange={(e) => setPartyName(e.target.value)}
+                maxLength={30}
+                placeholder={t ? "Pl: Pénteki buli" : "E.g: Friday Night"}
+                className="w-full h-11 px-4 text-sm font-bold outline-none rounded-xl"
+                style={{
+                  background: "rgba(10,4,0,0.55)",
+                  border: "1px solid rgba(255,185,0,0.25)",
+                  color: "#FFE566",
+                  fontFamily: "'Cinzel', serif",
+                }}
+              />
+            </GCard>
+          </motion.div>
+
+          {/* Game select */}
+          <motion.div
+            initial={{ opacity: 0, y: 14 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+          >
+            <GCard>
+              <GoldLabel>{t ? "JÁTÉK VÁLASZTÁSA" : "CHOOSE GAME"}</GoldLabel>
+              <div
+                className="h-px mb-3"
+                style={{
+                  background:
+                    "linear-gradient(90deg, rgba(255,185,0,0.35), transparent)",
+                }}
+              />
+              <div className="space-y-2">
+                {GAMES.map((g) => {
+                  const sel = selectedGameId === g.id;
+                  return (
+                    <button
+                      key={g.id}
+                      onClick={() => setSelectedGameId(g.id)}
+                      className="w-full flex items-center gap-3 p-3 rounded-xl transition-all text-left"
+                      style={{
+                        background: sel
+                          ? "rgba(255,185,0,0.1)"
+                          : "rgba(10,4,0,0.4)",
+                        border: `1px solid ${sel ? "rgba(255,185,0,0.45)" : "rgba(255,185,0,0.12)"}`,
+                      }}
+                    >
+                      <div className="w-12 h-12 rounded-xl overflow-hidden flex-shrink-0">
+                        <Image
+                          src={g.icon}
+                          alt={g.name}
+                          width={48}
+                          height={48}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p
+                          className="text-sm font-bold truncate"
+                          style={{ color: "#FFE8A0" }}
+                        >
+                          {t ? g.name : g.nameEn}
+                        </p>
+                        <p
+                          className="text-[11px] truncate mt-0.5"
+                          style={{ color: "rgba(255,185,0,0.4)" }}
+                        >
+                          {g.minPlayers}–{g.maxPlayers} {t ? "fő" : "players"}
+                        </p>
+                      </div>
+                      {sel && (
+                        <Check className="w-4 h-4 text-[#FFD700] flex-shrink-0" />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </GCard>
+          </motion.div>
+
+          {error && (
+            <div
+              className="p-3 rounded-xl text-sm text-center"
+              style={{
+                background: "rgba(180,30,30,0.15)",
+                border: "1px solid rgba(180,30,30,0.35)",
+                color: "#f87171",
+              }}
+            >
+              {error}
+            </div>
+          )}
+        </main>
+
+        <div
+          className="fixed bottom-0 left-0 right-0 z-20 px-4 pb-6 pt-3"
+          style={{
+            background:
+              "linear-gradient(to top, rgba(10,4,0,0.95) 0%, transparent 100%)",
+          }}
+        >
+          <PrimaryBtn
+            onClick={handleCreateParty}
+            disabled={!partyName.trim() || loading}
+          >
+            {loading ? "..." : t ? "TOVÁBB – MEGHÍVÓ" : "NEXT – INVITE"}
+          </PrimaryBtn>
         </div>
+      </div>
+    );
 
-        <div className="flex-1 p-6 flex flex-col gap-4">
-          {/* Create party card */}
-          <button
-            onClick={() => setView('create-setup')}
-            className="relative overflow-hidden rounded-2xl border-[1.5px] border-gold/30 bg-gradient-to-br from-secondary to-border/50 p-6 text-left cursor-pointer transition-all hover:border-gold/50 active:scale-[0.98]"
-          >
-            <div className="absolute -top-5 -right-5 text-[80px] opacity-[0.06] leading-none pointer-events-none">
-              <Sparkles className="w-20 h-20" />
-            </div>
-            <div className="text-4xl mb-3"><Sparkles className="w-9 h-9 text-gold" /></div>
-            <div className="text-gold text-lg font-extrabold mb-1">{t ? 'Parti letrehozasa' : 'Create Party'}</div>
-            <div className="text-muted-foreground text-sm leading-relaxed">
-              {t
-                ? 'Hivj meg baratokat linkkel vagy 6 jegyu koddal. Te valasztod a jatekot.'
-                : 'Invite friends with a link or 6-digit code. You choose the game.'}
-            </div>
-          </button>
+  // ══ CREATE INVITE ══
+  if (view === "create-invite" && currentParty) {
+    const selGame = GAMES.find((g) => g.id === currentParty.game_type);
+    return (
+      <div className="min-h-screen flex flex-col relative overflow-hidden safe-area-top safe-area-bottom">
+        <BG />
+        <header className="relative z-10 flex items-center justify-between px-4 pt-5 pb-3">
+          <BackBtn
+            onClick={() => setView("create-setup")}
+            label={t ? "Szerkesztés" : "Edit"}
+          />
+          <ScreenTitle label={t ? "MEGHÍVÓ" : "INVITE"} />
+          <div className="w-20" />
+        </header>
 
-          {/* Join party card */}
-          <button
-            onClick={() => setView('join')}
-            className="relative overflow-hidden rounded-2xl border-[1.5px] border-border bg-secondary p-6 text-left cursor-pointer transition-all hover:border-gold/30 active:scale-[0.98]"
+        <main className="flex-1 overflow-y-auto px-4 pb-32 z-10 space-y-4 pt-2">
+          {/* Party info */}
+          <motion.div
+            initial={{ opacity: 0, y: 14 }}
+            animate={{ opacity: 1, y: 0 }}
           >
-            <div className="absolute -top-5 -right-5 text-[80px] opacity-[0.04] leading-none pointer-events-none">
-              <UserPlus className="w-20 h-20" />
-            </div>
-            <div className="text-4xl mb-3"><UserPlus className="w-9 h-9 text-gold/70" /></div>
-            <div className="text-white text-lg font-extrabold mb-1">{t ? 'Csatlakozas' : 'Join Party'}</div>
-            <div className="text-muted-foreground text-sm leading-relaxed">
-              {t
-                ? 'Add meg a 6 jegyu kodot amit a parti gazdajatol kaptal.'
-                : 'Enter the 6-digit code you got from the party host.'}
-            </div>
-          </button>
+            <GCard>
+              <div className="flex items-center gap-3">
+                {selGame && (
+                  <div className="w-12 h-12 rounded-xl overflow-hidden flex-shrink-0">
+                    <Image
+                      src={selGame.icon}
+                      alt={selGame.name}
+                      width={48}
+                      height={48}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                )}
+                <div>
+                  <p
+                    className="font-black text-sm"
+                    style={{ fontFamily: "'Cinzel', serif", color: "#FFE566" }}
+                  >
+                    {currentParty.name}
+                  </p>
+                  <p
+                    className="text-xs mt-0.5"
+                    style={{ color: "rgba(255,185,0,0.5)" }}
+                  >
+                    {selGame ? (t ? selGame.name : selGame.nameEn) : ""}
+                  </p>
+                </div>
+              </div>
+            </GCard>
+          </motion.div>
+
+          {/* Code display */}
+          <motion.div
+            initial={{ opacity: 0, y: 14 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+          >
+            <GCard className="text-center">
+              <GoldLabel>{t ? "CSATLAKOZÁSI KÓD" : "JOIN CODE"}</GoldLabel>
+              <div
+                className="h-px mb-5"
+                style={{
+                  background:
+                    "linear-gradient(90deg, transparent, rgba(255,185,0,0.4), transparent)",
+                }}
+              />
+              <div
+                className="text-[44px] font-black tracking-[10px] mb-5"
+                style={{
+                  fontFamily: "'Cinzel', serif",
+                  background:
+                    "linear-gradient(180deg, #FFE566 0%, #FFB300 60%, #CC8800 100%)",
+                  WebkitBackgroundClip: "text",
+                  WebkitTextFillColor: "transparent",
+                  filter: "drop-shadow(0 0 16px rgba(255,185,0,0.3))",
+                }}
+              >
+                {currentParty.code}
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={copyCode}
+                  className="flex-1 py-2.5 rounded-xl flex items-center justify-center gap-2 text-xs font-black transition-all"
+                  style={{
+                    fontFamily: "'Cinzel', serif",
+                    background: copied
+                      ? "rgba(34,197,94,0.12)"
+                      : "rgba(255,185,0,0.08)",
+                    border: `1px solid ${copied ? "rgba(34,197,94,0.35)" : "rgba(255,185,0,0.25)"}`,
+                    color: copied ? "#4ade80" : "#FFD700",
+                  }}
+                >
+                  {copied ? (
+                    <>
+                      <Check className="w-3.5 h-3.5" />
+                      {t ? "MÁSOLVA" : "COPIED"}
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5" />
+                      {t ? "MÁSOLÁS" : "COPY"}
+                    </>
+                  )}
+                </button>
+                <button
+                  onClick={shareParty}
+                  className="flex-1 py-2.5 rounded-xl flex items-center justify-center gap-2 text-xs font-black"
+                  style={{
+                    fontFamily: "'Cinzel', serif",
+                    background: "rgba(255,185,0,0.06)",
+                    border: "1px solid rgba(255,185,0,0.2)",
+                    color: "#FFD700",
+                  }}
+                >
+                  <Share2 className="w-3.5 h-3.5" />
+                  {t ? "MEGOSZTÁS" : "SHARE"}
+                </button>
+              </div>
+            </GCard>
+          </motion.div>
+
+          {/* QR */}
+          <motion.div
+            initial={{ opacity: 0, y: 14 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+          >
+            <GCard className="text-center">
+              <GoldLabel>
+                {t ? "QR KÓD BEOLVASÁSSAL" : "SCAN QR CODE"}
+              </GoldLabel>
+              <div
+                className="h-px mb-4"
+                style={{
+                  background:
+                    "linear-gradient(90deg, transparent, rgba(255,185,0,0.35), transparent)",
+                }}
+              />
+              <div className="w-28 h-28 bg-white mx-auto rounded-xl flex items-center justify-center">
+                <QrCode className="w-16 h-16 text-black/60" />
+              </div>
+              <p
+                className="text-xs mt-3"
+                style={{
+                  color: "rgba(255,185,0,0.4)",
+                  fontFamily: "'Cinzel', serif",
+                }}
+              >
+                {t
+                  ? "Mutasd a képernyőt a barátodnak"
+                  : "Show this screen to your friend"}
+              </p>
+            </GCard>
+          </motion.div>
+        </main>
+
+        <div
+          className="fixed bottom-0 left-0 right-0 z-20 px-4 pb-6 pt-3"
+          style={{
+            background:
+              "linear-gradient(to top, rgba(10,4,0,0.95) 0%, transparent 100%)",
+          }}
+        >
+          <PrimaryBtn onClick={() => setView("create-lobby")}>
+            {t ? "LOBBY MEGNYITÁSA" : "OPEN LOBBY"}
+          </PrimaryBtn>
         </div>
       </div>
     );
   }
 
-  // ==========================
-  // CREATE - STEP 1: SETUP
-  // ==========================
-  if (view === 'create-setup') {
+  // ══ HOST LOBBY ══
+  if (view === "create-lobby" && currentParty) {
+    const selGame = GAMES.find((g) => g.id === currentParty.game_type);
     return (
-      <div className="min-h-screen bg-background flex flex-col">
-        <div className="p-4 pb-5 border-b border-gold/10">
-          <BackBtn onClick={() => setView('menu')} />
-          <h2 className="mt-4 mb-1 text-white text-[22px] font-extrabold">{t ? 'Parti letrehozasa' : 'Create Party'}</h2>
-          <p className="m-0 text-muted-foreground text-sm">{t ? 'Valaszd ki a jatekot es add meg a nevet' : 'Choose the game and set a name'}</p>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-6">
-          {/* Party name */}
-          <div className="mb-6">
-            <SectionLabel>{t ? 'Parti neve' : 'Party name'}</SectionLabel>
-            <input
-              value={partyName}
-              onChange={e => setPartyName(e.target.value)}
-              placeholder={t ? 'Pl: Penteki buli' : 'E.g: Friday Night'}
-              maxLength={30}
-              className="w-full py-3.5 px-4 bg-secondary border-[1.5px] border-border rounded-xl text-white text-base font-normal outline-none focus:border-gold/50 transition-colors"
-            />
+      <div className="min-h-screen flex flex-col relative overflow-hidden safe-area-top safe-area-bottom">
+        <BG />
+        <header className="relative z-10 flex items-center justify-between px-4 pt-5 pb-3">
+          <div
+            className="flex items-center gap-2 px-3 py-2 rounded-xl"
+            style={{
+              background: "rgba(15,6,0,0.55)",
+              border: "1px solid rgba(34,197,94,0.3)",
+              backdropFilter: "blur(8px)",
+            }}
+          >
+            <Wifi className="w-3.5 h-3.5 text-green-400" />
+            <span
+              className="text-xs font-bold text-green-400"
+              style={{ fontFamily: "'Cinzel', serif" }}
+            >
+              LIVE
+            </span>
           </div>
+          <ScreenTitle label={currentParty.name.toUpperCase()} />
+          <button
+            onClick={copyCode}
+            className="px-3 py-2 rounded-xl text-xs font-black"
+            style={{
+              fontFamily: "'Cinzel', serif",
+              background: copied ? "rgba(34,197,94,0.1)" : "rgba(15,6,0,0.55)",
+              border: `1px solid ${copied ? "rgba(34,197,94,0.35)" : "rgba(255,185,0,0.3)"}`,
+              color: copied ? "#4ade80" : "#FFD700",
+              backdropFilter: "blur(8px)",
+            }}
+          >
+            {currentParty.code}
+          </button>
+        </header>
 
-          {/* Game select */}
-          <div className="mb-6">
-            <SectionLabel>{t ? 'Jatek valasztasa' : 'Choose game'}</SectionLabel>
-            <div className="flex flex-col gap-2.5">
-              {GAMES.map(g => {
-                const selected = selectedGameId === g.id;
+        <main className="flex-1 overflow-y-auto px-4 pb-40 z-10 space-y-4 pt-2">
+          {/* Game picker */}
+          <GCard>
+            <GoldLabel>{t ? "JÁTÉK KIVÁLASZTÁSA" : "SELECT GAME"}</GoldLabel>
+            <div
+              className="h-px mb-3"
+              style={{
+                background:
+                  "linear-gradient(90deg, rgba(255,185,0,0.35), transparent)",
+              }}
+            />
+            <div
+              className="flex gap-2 overflow-x-auto pb-1"
+              style={{ scrollbarWidth: "none" }}
+            >
+              {GAMES.map((g) => {
+                const active = currentParty.game_type === g.id;
                 return (
                   <button
                     key={g.id}
-                    onClick={() => setSelectedGameId(g.id)}
-                    className={cn(
-                      'flex items-center gap-3.5 p-4 rounded-2xl border-[1.5px] cursor-pointer transition-all text-left',
-                      selected
-                        ? 'bg-gold/10 border-gold/50'
-                        : 'bg-secondary border-border hover:border-gold/20'
-                    )}
+                    onClick={() => handleSelectGame(g.id)}
+                    className="flex-shrink-0 flex items-center gap-2 py-2 px-3 rounded-2xl text-xs font-black transition-all"
+                    style={{
+                      fontFamily: "'Cinzel', serif",
+                      background: active
+                        ? "rgba(255,185,0,0.12)"
+                        : "rgba(10,4,0,0.5)",
+                      border: `1px solid ${active ? "rgba(255,185,0,0.45)" : "rgba(255,185,0,0.12)"}`,
+                      color: active ? "#FFD700" : "rgba(255,185,0,0.45)",
+                    }}
                   >
-                    <div className="w-14 h-14 rounded-xl overflow-hidden bg-black/50 shrink-0">
-                      <Image src={g.icon} alt={g.name} width={56} height={56} className="w-full h-full object-cover" />
+                    <div className="w-5 h-5 rounded overflow-hidden flex-shrink-0">
+                      <Image
+                        src={g.icon}
+                        alt={g.name}
+                        width={20}
+                        height={20}
+                        className="w-full h-full object-cover"
+                      />
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-white text-[15px] font-bold">{t ? g.name : g.nameEn}</div>
-                      <div className="text-muted-foreground text-xs mt-0.5 truncate">
-                        {t ? g.description : g.descriptionEn} &middot; {g.minPlayers}-{g.maxPlayers} {t ? 'fo' : 'players'}
-                      </div>
-                    </div>
-                    {selected && <Check className="w-5 h-5 text-gold shrink-0" />}
+                    {t ? g.name : g.nameEn}
                   </button>
                 );
               })}
             </div>
-          </div>
+          </GCard>
 
-          {error && (
-            <div className="p-4 rounded-xl bg-destructive/10 border border-destructive/30 text-destructive text-sm mb-4">
-              {error}
+          {/* Members */}
+          <GCard>
+            <GoldLabel>
+              {t ? "JÁTÉKOSOK" : "PLAYERS"} ({members.length}/
+              {currentParty.max_players})
+            </GoldLabel>
+            <div
+              className="h-px mb-3"
+              style={{
+                background:
+                  "linear-gradient(90deg, rgba(255,185,0,0.35), transparent)",
+              }}
+            />
+            <div className="space-y-2">
+              {members.map((m) => (
+                <MemberRow
+                  key={m.id}
+                  m={m}
+                  isHost={m.user_id === currentParty.host_id}
+                  isMe={m.user_id === userId}
+                />
+              ))}
             </div>
-          )}
-        </div>
+          </GCard>
+        </main>
 
-        <div className="p-6 pt-0">
-          <GoldButton onClick={handleCreateParty} disabled={!partyName.trim() || loading}>
-            {loading ? <RefreshCw className="w-5 h-5 animate-spin" /> : (t ? 'Tovabb - Meghivo letrehozasa' : 'Next - Create Invite')}
-          </GoldButton>
+        <div
+          className="fixed bottom-0 left-0 right-0 z-20 px-4 pb-6 pt-3 space-y-2"
+          style={{
+            background:
+              "linear-gradient(to top, rgba(10,4,0,0.95) 0%, transparent 100%)",
+          }}
+        >
+          <p
+            className="text-center text-[10px] mb-1"
+            style={{
+              color: "rgba(255,185,0,0.4)",
+              fontFamily: "'Cinzel', serif",
+            }}
+          >
+            {
+              members.filter(
+                (m) => m.is_ready || m.user_id === currentParty.host_id,
+              ).length
+            }
+            /{members.length} {t ? "játékos kész" : "players ready"}
+          </p>
+          <PrimaryBtn onClick={handleStartGame} disabled={!canStart}>
+            <Play
+              className="w-4 h-4"
+              style={{ color: canStart ? "#FFD700" : "rgba(255,185,0,0.3)" }}
+            />
+            {t ? "JÁTÉK INDÍTÁSA" : "START GAME"}
+          </PrimaryBtn>
+          <OutlineBtn onClick={handleLeaveParty} red>
+            {t ? "PARTI FELOSZLATÁSA" : "DISSOLVE PARTY"}
+          </OutlineBtn>
         </div>
       </div>
     );
   }
 
-  // ==========================
-  // CREATE - STEP 2: INVITE
-  // ==========================
-  if (view === 'create-invite' && currentParty) {
-    const selGame = GAMES.find(g => g.id === currentParty.game_type);
+  // ══ JOIN ══
+  if (view === "join")
     return (
-      <div className="min-h-screen bg-background flex flex-col">
-        <div className="p-4 pb-5 border-b border-gold/10">
-          <BackBtn onClick={() => setView('create-setup')} label={t ? 'Szerkesztes' : 'Edit'} />
-          <h2 className="mt-4 mb-1 text-white text-[22px] font-extrabold">{t ? 'Meghivo' : 'Invite'}</h2>
-          <p className="m-0 text-muted-foreground text-sm">{t ? 'Hivd meg a barataidat' : 'Invite your friends'}</p>
-        </div>
+      <div className="min-h-screen flex flex-col relative overflow-hidden safe-area-top safe-area-bottom">
+        <BG />
+        <header className="relative z-10 flex items-center justify-between px-4 pt-5 pb-3">
+          <BackBtn
+            onClick={() => {
+              setView("menu");
+              setJoinCode("");
+              setFoundParty(null);
+              setError("");
+            }}
+            label={t ? "Vissza" : "Back"}
+          />
+          <ScreenTitle label={t ? "CSATLAKOZÁS" : "JOIN PARTY"} />
+          <div className="w-20" />
+        </header>
 
-        <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-5">
-          {/* Party info */}
-          <div className="bg-secondary rounded-2xl p-5 border border-gold/15">
-            <div className="flex gap-3.5 items-center mb-4">
+        <main className="flex-1 px-4 pb-10 z-10 space-y-4 pt-2">
+          <motion.div
+            initial={{ opacity: 0, y: 14 }}
+            animate={{ opacity: 1, y: 0 }}
+          >
+            <GCard className="text-center">
+              <GoldLabel>{t ? "KÓD MEGADÁSA" : "ENTER CODE"}</GoldLabel>
+              <div
+                className="h-px mb-5"
+                style={{
+                  background:
+                    "linear-gradient(90deg, transparent, rgba(255,185,0,0.4), transparent)",
+                }}
+              />
+              <input
+                value={joinCode}
+                onChange={(e) => {
+                  setJoinCode(
+                    e.target.value
+                      .replace(/[^A-Z0-9]/gi, "")
+                      .toUpperCase()
+                      .slice(0, 6),
+                  );
+                  setFoundParty(null);
+                  setError("");
+                }}
+                onKeyDown={(e) => e.key === "Enter" && handleSearchParty()}
+                placeholder="ABC123"
+                maxLength={6}
+                autoFocus
+                className="w-full py-3 px-4 text-center text-3xl font-black tracking-[8px] uppercase outline-none rounded-xl mb-4"
+                style={{
+                  background: "rgba(10,4,0,0.6)",
+                  border: "1px solid rgba(255,185,0,0.25)",
+                  fontFamily: "'Cinzel', serif",
+                  background: "transparent",
+                  color: "#FFE566",
+                  letterSpacing: "0.4em",
+                }}
+              />
+              {/* Code boxes */}
+              <div className="flex gap-2 justify-center mb-4">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div
+                    key={i}
+                    className="w-10 h-12 rounded-xl flex items-center justify-center text-xl font-black transition-all"
+                    style={{
+                      background: joinCode[i]
+                        ? "rgba(255,185,0,0.1)"
+                        : "rgba(10,4,0,0.5)",
+                      border: `1px solid ${joinCode[i] ? "rgba(255,185,0,0.45)" : "rgba(255,185,0,0.15)"}`,
+                      fontFamily: "'Cinzel', serif",
+                      color: "#FFE566",
+                    }}
+                  >
+                    {joinCode[i] || ""}
+                  </div>
+                ))}
+              </div>
+              <PrimaryBtn
+                onClick={handleSearchParty}
+                disabled={joinCode.length !== 6 || searching}
+              >
+                {searching
+                  ? t
+                    ? "KERESÉS..."
+                    : "SEARCHING..."
+                  : t
+                    ? "PARTI KERESÉSE"
+                    : "SEARCH PARTY"}
+              </PrimaryBtn>
+            </GCard>
+          </motion.div>
+
+          {error && (
+            <div
+              className="p-3 rounded-xl text-sm text-center"
+              style={{
+                background: "rgba(180,30,30,0.15)",
+                border: "1px solid rgba(180,30,30,0.35)",
+                color: "#f87171",
+              }}
+            >
+              {error}
+            </div>
+          )}
+
+          <AnimatePresence>
+            {foundParty && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+              >
+                <GCard>
+                  <div className="flex items-center gap-2 mb-3">
+                    <Check className="w-4 h-4 text-green-400" />
+                    <GoldLabel>
+                      {t ? "PARTI MEGTALÁLVA" : "PARTY FOUND"}
+                    </GoldLabel>
+                  </div>
+                  <div className="flex items-center gap-3 mb-4">
+                    {(() => {
+                      const g = GAMES.find(
+                        (gm) => gm.id === foundParty.game_type,
+                      );
+                      return g ? (
+                        <div className="w-12 h-12 rounded-xl overflow-hidden flex-shrink-0">
+                          <Image
+                            src={g.icon}
+                            alt={g.name}
+                            width={48}
+                            height={48}
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                      ) : null;
+                    })()}
+                    <div>
+                      <p
+                        className="font-black text-sm"
+                        style={{
+                          fontFamily: "'Cinzel', serif",
+                          color: "#FFE566",
+                        }}
+                      >
+                        {foundParty.name}
+                      </p>
+                      <p
+                        className="text-xs"
+                        style={{ color: "rgba(255,185,0,0.5)" }}
+                      >
+                        {GAMES.find((gm) => gm.id === foundParty.game_type)?.[
+                          t ? "name" : "nameEn"
+                        ] || foundParty.game_type}
+                      </p>
+                    </div>
+                  </div>
+                  <PrimaryBtn onClick={handleJoinParty} disabled={loading}>
+                    {loading
+                      ? t
+                        ? "CSATLAKOZÁS..."
+                        : "JOINING..."
+                      : t
+                        ? "BELÉPÉS A PARTIBA!"
+                        : "JOIN PARTY!"}
+                  </PrimaryBtn>
+                </GCard>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </main>
+      </div>
+    );
+
+  // ══ GUEST LOBBY ══
+  if (view === "guest-lobby" && currentParty) {
+    const selGame = GAMES.find((g) => g.id === currentParty.game_type);
+    return (
+      <div className="min-h-screen flex flex-col relative overflow-hidden safe-area-top safe-area-bottom">
+        <BG />
+        <header className="relative z-10 flex items-center justify-between px-4 pt-5 pb-3">
+          <div
+            className="flex items-center gap-2 px-3 py-2 rounded-xl"
+            style={{
+              background: "rgba(15,6,0,0.55)",
+              border: "1px solid rgba(34,197,94,0.3)",
+              backdropFilter: "blur(8px)",
+            }}
+          >
+            <Wifi className="w-3.5 h-3.5 text-green-400" />
+            <span
+              className="text-xs font-bold text-green-400"
+              style={{ fontFamily: "'Cinzel', serif" }}
+            >
+              {t ? "CSATLAKOZVA" : "CONNECTED"}
+            </span>
+          </div>
+          <ScreenTitle label={currentParty.name.toUpperCase()} />
+          <div className="w-20" />
+        </header>
+
+        <main className="flex-1 overflow-y-auto px-4 pb-40 z-10 space-y-4 pt-2">
+          {/* Game info */}
+          <GCard>
+            <div className="flex items-center gap-3">
               {selGame && (
-                <div className="w-12 h-12 rounded-xl overflow-hidden bg-black/50 shrink-0">
-                  <Image src={selGame.icon} alt={selGame.name} width={48} height={48} className="w-full h-full object-cover" />
+                <div className="w-10 h-10 rounded-xl overflow-hidden flex-shrink-0">
+                  <Image
+                    src={selGame.icon}
+                    alt={selGame.name}
+                    width={40}
+                    height={40}
+                    className="w-full h-full object-cover"
+                  />
                 </div>
               )}
               <div>
-                <div className="text-white text-base font-bold">{currentParty.name}</div>
-                <div className="text-muted-foreground text-sm">{selGame ? (t ? selGame.name : selGame.nameEn) : ''}</div>
+                <p
+                  className="text-xs font-black tracking-wider"
+                  style={{
+                    fontFamily: "'Cinzel', serif",
+                    color: "rgba(255,185,0,0.5)",
+                  }}
+                >
+                  {t ? "JÁTÉK" : "GAME"}
+                </p>
+                <p className="text-sm font-bold" style={{ color: "#FFE566" }}>
+                  {selGame ? (t ? selGame.name : selGame.nameEn) : ""}
+                </p>
+              </div>
+              <div className="ml-auto text-right">
+                <p
+                  className="text-[10px]"
+                  style={{
+                    color: "rgba(255,185,0,0.4)",
+                    fontFamily: "'Cinzel', serif",
+                  }}
+                >
+                  KÓD
+                </p>
+                <p
+                  className="text-sm font-black"
+                  style={{ fontFamily: "'Cinzel', serif", color: "#FFD700" }}
+                >
+                  {currentParty.code}
+                </p>
               </div>
             </div>
-            <GoldDivider />
-          </div>
+          </GCard>
 
-          {/* Code display */}
-          <div className="bg-gradient-to-br from-background to-secondary rounded-2xl p-6 border-2 border-gold/20 text-center">
-            <SectionLabel>{t ? 'Csatlakozasi kod' : 'Join code'}</SectionLabel>
-            <div className="text-gold text-[42px] font-black tracking-[12px] my-4 tabular-nums">
-              {currentParty.code}
-            </div>
-            <div className="flex gap-2.5">
-              <button
-                onClick={copyCode}
-                className={cn(
-                  'flex-1 py-3 rounded-xl text-sm font-semibold cursor-pointer transition-all flex items-center justify-center gap-2 border',
-                  copied
-                    ? 'bg-green-500/10 border-green-500/30 text-green-500'
-                    : 'bg-secondary border-border text-white hover:border-gold/30'
-                )}
-              >
-                {copied ? <><Check className="w-4 h-4" /> {t ? 'Masolva!' : 'Copied!'}</> : <><Copy className="w-4 h-4" /> {t ? 'Kod masolasa' : 'Copy code'}</>}
-              </button>
-              <button
-                onClick={shareParty}
-                className="flex-1 py-3 bg-secondary border border-border rounded-xl text-white text-sm font-semibold cursor-pointer hover:border-gold/30 transition-all flex items-center justify-center gap-2"
-              >
-                <Share2 className="w-4 h-4" /> {t ? 'Link kuldese' : 'Share link'}
-              </button>
-            </div>
-          </div>
-
-          {/* QR placeholder */}
-          <div className="bg-secondary rounded-2xl p-5 text-center border border-border">
-            <SectionLabel>{t ? 'QR kod beolvasassal' : 'Scan QR code'}</SectionLabel>
-            <div className="w-[120px] h-[120px] bg-white mx-auto rounded-xl flex items-center justify-center mt-3">
-              <QrCode className="w-16 h-16 text-black/60" />
-            </div>
-            <div className="text-muted-foreground text-xs mt-3">
-              {t ? 'Mutasd a kepernyor a baratodnak' : 'Show this screen to your friend'}
-            </div>
-          </div>
-        </div>
-
-        <div className="p-6 pt-0">
-          <GoldButton onClick={() => setView('create-lobby')}>
-            {t ? 'Lobby megnyitasa' : 'Open Lobby'}
-          </GoldButton>
-        </div>
-      </div>
-    );
-  }
-
-  // ==========================
-  // CREATE - STEP 3: HOST LOBBY
-  // ==========================
-  if ((view === 'create-lobby') && currentParty) {
-    const selGame = GAMES.find(g => g.id === currentParty.game_type);
-    return (
-      <div className="min-h-screen bg-background flex flex-col">
-        {/* Header */}
-        <div className="p-4 border-b border-gold/10">
-          <div className="flex justify-between items-center">
-            <div className="flex items-center gap-2">
-              <Wifi className="w-3.5 h-3.5 text-green-500" />
-              <span className="text-green-500 text-xs font-semibold">Live</span>
-            </div>
-            <button
-              onClick={copyCode}
-              className={cn(
-                'py-1.5 px-3 rounded-lg text-xs font-mono cursor-pointer border transition-all',
-                copied ? 'bg-green-500/10 border-green-500/30 text-green-500' : 'bg-secondary border-border text-muted-foreground hover:text-gold'
-              )}
-            >
-              {currentParty.code}
-            </button>
-          </div>
-          <h2 className="mt-4 mb-0 text-white text-xl font-extrabold">{currentParty.name}</h2>
-        </div>
-
-        {/* Game selector (horizontal scroll) */}
-        <div className="px-4 py-4 border-b border-secondary">
-          <SectionLabel>{t ? 'Kivalasztott jatek (te valasztod)' : 'Selected game (you choose)'}</SectionLabel>
-          <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
-            {GAMES.map(g => {
-              const active = currentParty.game_type === g.id;
-              return (
-                <button
-                  key={g.id}
-                  onClick={() => handleSelectGame(g.id)}
-                  className={cn(
-                    'shrink-0 flex items-center gap-2 py-2.5 px-4 rounded-3xl border-[1.5px] cursor-pointer text-sm font-semibold transition-all',
-                    active
-                      ? 'bg-gold/15 border-gold/60 text-white'
-                      : 'bg-secondary border-border text-muted-foreground hover:border-gold/30'
-                  )}
-                >
-                  <div className="w-6 h-6 rounded overflow-hidden shrink-0">
-                    <Image src={g.icon} alt={g.name} width={24} height={24} className="w-full h-full object-cover" />
-                  </div>
-                  {t ? g.name : g.nameEn}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Members */}
-        <div className="flex-1 overflow-y-auto px-4 py-4">
-          <div className="flex justify-between items-center mb-3">
-            <SectionLabel>
-              {t ? 'Jatekosok' : 'Players'} ({members.length}/{currentParty.max_players})
-            </SectionLabel>
-          </div>
-
-          <div className="flex flex-col gap-2">
-            {members.map(m => {
-              const isMemberHost = m.user_id === currentParty.host_id;
-              const memberReady = m.is_ready || isMemberHost;
-              const isMe = m.user_id === userId;
-              return (
-                <div
-                  key={m.id}
-                  className={cn(
-                    'flex items-center gap-3 p-3 rounded-xl border transition-all',
-                    isMemberHost ? 'bg-gold/5 border-gold/20' : 'bg-secondary border-border',
-                    isMe && !isMemberHost && 'border-gold/20'
-                  )}
-                >
-                  <Avatar name={m.profiles?.username || '?'} size={40} />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-white text-sm font-semibold truncate">{m.profiles?.username || 'Unknown'}</span>
-                      {isMemberHost && (
-                        <span className="bg-gold/15 text-gold text-[10px] px-1.5 py-0.5 rounded font-bold">HOST</span>
-                      )}
-                      {isMe && !isMemberHost && (
-                        <span className="bg-gold/10 text-gold/60 text-[10px] px-1.5 py-0.5 rounded">Te</span>
-                      )}
-                    </div>
-                    <div className={cn('text-xs mt-0.5', memberReady ? 'text-green-400' : 'text-muted-foreground')}>
-                      {isMemberHost ? (t ? 'Gazda' : 'Host') : memberReady ? (t ? 'Kesz' : 'Ready') : (t ? 'Var...' : 'Waiting...')}
-                    </div>
-                  </div>
-                  {isMemberHost && <Crown className="w-5 h-5 text-gold shrink-0" />}
-                  {memberReady && !isMemberHost && <Check className="w-5 h-5 text-green-400 shrink-0" />}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Bottom actions */}
-        <div className="p-4 pb-8 flex flex-col gap-2.5 bg-gradient-to-t from-background via-background to-transparent">
-          <div className="text-center text-muted-foreground text-xs mb-1">
-            {members.filter(m => m.is_ready || m.user_id === currentParty.host_id).length}/{members.length} {t ? 'jatekos kesz' : 'players ready'}
-          </div>
-          <GoldButton onClick={handleStartGame} disabled={!canStart}>
-            <Play className="w-5 h-5" /> {t ? 'Jatek inditasa!' : 'Start Game!'}
-          </GoldButton>
-          <GoldButton onClick={handleLeaveParty} variant="danger">
-            {t ? 'Parti feloszlatasa' : 'Dissolve Party'}
-          </GoldButton>
-        </div>
-      </div>
-    );
-  }
-
-  // ==========================
-  // JOIN PARTY
-  // ==========================
-  if (view === 'join') {
-    return (
-      <div className="min-h-screen bg-background flex flex-col">
-        <div className="p-4 pb-6 border-b border-gold/10">
-          <BackBtn onClick={() => { setView('menu'); setJoinCode(''); setFoundParty(null); setError(''); }} />
-          <h2 className="mt-4 mb-1 text-white text-[22px] font-extrabold">{t ? 'Csatlakozas' : 'Join Party'}</h2>
-          <p className="m-0 text-muted-foreground text-sm">{t ? 'Add meg a 6 jegyu kodot' : 'Enter the 6-digit code'}</p>
-        </div>
-
-        <div className="flex-1 p-6 flex flex-col gap-5">
-          {/* Code input */}
-          <div className="text-center">
-            <SectionLabel>{t ? 'Kod beirasa' : 'Enter code'}</SectionLabel>
-            <input
-              value={joinCode}
-              onChange={e => {
-                setJoinCode(e.target.value.replace(/[^A-Z0-9]/gi, '').toUpperCase().slice(0, 6));
-                setFoundParty(null);
-                setError('');
+          {/* Members */}
+          <GCard>
+            <GoldLabel>
+              {t ? "JÁTÉKOSOK" : "PLAYERS"} ({members.length})
+            </GoldLabel>
+            <div
+              className="h-px mb-3"
+              style={{
+                background:
+                  "linear-gradient(90deg, rgba(255,185,0,0.35), transparent)",
               }}
-              placeholder="ABC123"
-              maxLength={6}
-              autoFocus
-              className="w-full py-4 px-4 bg-secondary border-[1.5px] border-border rounded-xl text-gold text-[28px] font-black tracking-[8px] text-center uppercase outline-none focus:border-gold/50 transition-colors mt-4"
             />
-
-            {/* Code boxes visualization */}
-            <div className="flex gap-2 mt-3 justify-center">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <div
-                  key={i}
-                  className={cn(
-                    'w-10 h-12 rounded-xl border-[1.5px] flex items-center justify-center text-gold text-xl font-extrabold transition-all',
-                    joinCode[i] ? 'bg-border border-gold/40' : 'bg-secondary border-border'
-                  )}
-                >
-                  {joinCode[i] || ''}
-                </div>
+            <div className="space-y-2">
+              {members.map((m) => (
+                <MemberRow
+                  key={m.id}
+                  m={m}
+                  isHost={m.user_id === currentParty.host_id}
+                  isMe={m.user_id === userId}
+                />
               ))}
             </div>
-          </div>
+          </GCard>
 
-          <GoldButton onClick={handleSearchParty} disabled={joinCode.length !== 6 || searching}>
-            {searching ? <><RefreshCw className="w-4 h-4 animate-spin" /> {t ? 'Kereses...' : 'Searching...'}</> : (t ? 'Parti keresese' : 'Search Party')}
-          </GoldButton>
+          {/* Waiting */}
+          <GCard className="text-center">
+            <RefreshCw
+              className="w-6 h-6 mx-auto mb-2 animate-spin"
+              style={{ color: "rgba(255,185,0,0.4)", animationDuration: "3s" }}
+            />
+            <p
+              className="text-xs"
+              style={{
+                color: "rgba(255,185,0,0.5)",
+                fontFamily: "'Cinzel', serif",
+              }}
+            >
+              {t ? "VÁRD MEG A HOST INDÍTÁSÁT" : "WAITING FOR HOST TO START"}
+            </p>
+          </GCard>
+        </main>
 
-          {error && (
-            <div className="p-4 rounded-xl bg-destructive/10 border border-destructive/30 text-destructive text-sm text-center">
-              {error}
-            </div>
-          )}
-
-          {/* Found party */}
-          {foundParty && (
-            <div className="bg-secondary rounded-2xl p-5 border-[1.5px] border-green-500/30 animate-in fade-in slide-in-from-bottom-2 duration-300">
-              <div className="text-green-500 text-xs font-bold mb-3 tracking-wider flex items-center gap-1.5">
-                <Check className="w-4 h-4" /> {t ? 'PARTI MEGTALALVA' : 'PARTY FOUND'}
-              </div>
-              <div className="flex gap-3.5 items-center mb-4">
-                <div className="w-14 h-14 rounded-xl overflow-hidden bg-black/50 shrink-0">
-                  {(() => {
-                    const g = GAMES.find(gm => gm.id === foundParty.game_type);
-                    return g ? <Image src={g.icon} alt={g.name} width={56} height={56} className="w-full h-full object-cover" /> : null;
-                  })()}
-                </div>
-                <div>
-                  <div className="text-white text-lg font-extrabold">{foundParty.name}</div>
-                  <div className="text-muted-foreground text-sm">
-                    {GAMES.find(gm => gm.id === foundParty.game_type)?.[t ? 'name' : 'nameEn'] || foundParty.game_type}
-                  </div>
-                </div>
-              </div>
-              <GoldButton onClick={handleJoinParty} variant="success" disabled={loading}>
-                {loading ? <><RefreshCw className="w-4 h-4 animate-spin" /> {t ? 'Csatlakozas...' : 'Joining...'}</> : (t ? 'Belepes a partiba!' : 'Join Party!')}
-              </GoldButton>
-            </div>
-          )}
-
-          <GoldDivider />
-        </div>
-      </div>
-    );
-  }
-
-  // ==========================
-  // GUEST LOBBY (joined as non-host)
-  // ==========================
-  if (view === 'guest-lobby' && currentParty) {
-    const selGame = GAMES.find(g => g.id === currentParty.game_type);
-    return (
-      <div className="min-h-screen bg-background flex flex-col">
-        <div className="p-4 border-b border-gold/10">
-          <div className="flex items-center gap-2">
-            <Wifi className="w-3.5 h-3.5 text-green-500" />
-            <span className="text-green-500 text-xs font-semibold">{t ? 'Csatlakozva' : 'Connected'}</span>
-          </div>
-          <h2 className="mt-3 mb-1 text-white text-xl font-extrabold">{currentParty.name}</h2>
-          <div className="text-muted-foreground text-sm flex gap-2 items-center">
-            {selGame && (
-              <div className="w-5 h-5 rounded overflow-hidden shrink-0">
-                <Image src={selGame.icon} alt={selGame.name} width={20} height={20} className="w-full h-full object-cover" />
-              </div>
+        <div
+          className="fixed bottom-0 left-0 right-0 z-20 px-4 pb-6 pt-3 space-y-2"
+          style={{
+            background:
+              "linear-gradient(to top, rgba(10,4,0,0.95) 0%, transparent 100%)",
+          }}
+        >
+          <PrimaryBtn onClick={handleToggleReady}>
+            {isReady ? (
+              <>
+                <Check className="w-4 h-4" style={{ color: "#4ade80" }} />
+                {t ? "KÉSZ VAGYOK!" : "I'M READY!"}
+              </>
+            ) : t ? (
+              "KÉSZ VAGYOK"
+            ) : (
+              "READY"
             )}
-            <span>{selGame ? (t ? selGame.name : selGame.nameEn) : ''}</span>
-            <span>&middot;</span>
-            <span>{t ? 'Kod:' : 'Code:'} {currentParty.code}</span>
-          </div>
-        </div>
-
-        {/* Members */}
-        <div className="flex-1 overflow-y-auto px-4 py-4">
-          <SectionLabel>{t ? 'Jatekosok' : 'Players'} ({members.length})</SectionLabel>
-          <div className="flex flex-col gap-2 mt-2">
-            {members.map(m => {
-              const isMemberHost = m.user_id === currentParty.host_id;
-              const memberReady = m.is_ready || isMemberHost;
-              const isMe = m.user_id === userId;
-              return (
-                <div
-                  key={m.id}
-                  className={cn(
-                    'flex items-center gap-3 p-3.5 rounded-xl border transition-all',
-                    isMe ? 'bg-gold/5 border-gold/20' : 'bg-secondary border-border'
-                  )}
-                >
-                  <Avatar name={m.profiles?.username || '?'} size={40} />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-white text-sm font-semibold truncate">{m.profiles?.username || 'Unknown'}</span>
-                      {isMemberHost && <span className="bg-gold/15 text-gold text-[10px] px-1.5 py-0.5 rounded font-bold">HOST</span>}
-                      {isMe && <span className="bg-gold/10 text-gold/60 text-[10px] px-1.5 py-0.5 rounded">Te</span>}
-                    </div>
-                    <div className={cn('text-xs mt-0.5', memberReady ? 'text-green-400' : 'text-muted-foreground')}>
-                      {memberReady ? (t ? 'Kesz' : 'Ready') : (t ? 'Nem kesz' : 'Not ready')}
-                    </div>
-                  </div>
-                  {isMemberHost && <Crown className="w-5 h-5 text-gold shrink-0" />}
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Waiting message */}
-          <div className="mt-5 p-4 bg-secondary rounded-xl text-center border border-border">
-            <RefreshCw className="w-6 h-6 text-muted-foreground mx-auto mb-2 animate-spin" style={{ animationDuration: '3s' }} />
-            <div className="text-muted-foreground text-sm">{t ? 'Vard meg a host inditasat' : 'Waiting for host to start'}</div>
-          </div>
-        </div>
-
-        <div className="p-4 pb-8 flex flex-col gap-2.5">
-          <GoldButton onClick={handleToggleReady} variant={isReady ? 'success' : 'gold'}>
-            {isReady ? <><Check className="w-5 h-5" /> {t ? 'Kesz vagyok!' : "I'm Ready!"}</> : (t ? 'Kesz vagyok' : 'Ready')}
-          </GoldButton>
-          <GoldButton onClick={handleLeaveParty} variant="danger">
-            {t ? 'Kilepes a partibol' : 'Leave Party'}
-          </GoldButton>
+          </PrimaryBtn>
+          <OutlineBtn onClick={handleLeaveParty} red>
+            {t ? "KILÉPÉS A PARTIBÓL" : "LEAVE PARTY"}
+          </OutlineBtn>
         </div>
       </div>
     );
