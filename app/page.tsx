@@ -30,7 +30,7 @@ type AppView =
   | "game";
 
 function GameRouter() {
-  const { currentGame, setCurrentGame, setPlayers, language, setLanguage } =
+  const { currentGame, setCurrentGame, language, setLanguage } =
     useGame();
   const [view, setView] = useState<AppView>("welcome");
   const [user, setUser] = useState<User | null>(null);
@@ -63,6 +63,11 @@ function GameRouter() {
 
         if (profile?.username) {
           setUsername(profile.username);
+        } else if (user.email) {
+          setUsername(user.email.split("@")[0]);
+        } else {
+          // Anonymous user without profile yet
+          setUsername("Vendeg");
         }
         if (profile?.language) {
           setLanguage(profile.language as "hu" | "en");
@@ -184,9 +189,7 @@ function GameRouter() {
       name: m.profiles?.username || `Jatekos ${index + 1}`,
       avatar: ["🎮", "🎲", "🃏", "🍺", "🎯", "🎪", "🎭", "🎨"][index % 8],
       isHost: index === 0,
-      sips: 0,
     }));
-    setPlayers(partyPlayers);
     setPartyMembers(partyPlayers);
 
     setView("game");
@@ -229,6 +232,10 @@ function GameRouter() {
     return (
       <AuthForm
         onSuccess={handleAuthSuccess}
+        onGuestSuccess={() => {
+          setIsOnlineMode(true);
+          setView("party");
+        }}
         onBack={handleAuthBack}
         language={language}
       />
