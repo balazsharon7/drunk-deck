@@ -30,6 +30,7 @@ export interface GameInfo {
   isPremium?: boolean;
   isNew?: boolean;
   isPopular?: boolean;
+  isMultiplayer?: boolean;
 }
 
 export const GAMES: GameInfo[] = [
@@ -53,6 +54,7 @@ export const GAMES: GameInfo[] = [
     ratingCount: 1250,
     icon: "/icons/kings-cup-new.png",
     isPopular: true,
+    isMultiplayer: true,
   },
   {
     id: "ride-the-bus",
@@ -73,6 +75,7 @@ export const GAMES: GameInfo[] = [
     ratingCount: 890,
     icon: "/icons/ride-the-bus-new.png",
     isPopular: true,
+    isMultiplayer: true,
   },
   {
     id: "blackjack",
@@ -133,6 +136,7 @@ export const GAMES: GameInfo[] = [
     ratingCount: 980,
     icon: "/icons/barlangnyelv-new.png",
     isPopular: true,
+    isMultiplayer: true,
   },
   {
     id: "rating-game",
@@ -167,6 +171,10 @@ export function getDrinkingGames(): GameInfo[] {
 
 export function getNonDrinkingGames(): GameInfo[] {
   return GAMES.filter((game) => game.category === "non-drinking");
+}
+
+export function getMultiplayerGames(): GameInfo[] {
+  return GAMES.filter((game) => game.isMultiplayer);
 }
 
 export function getPopularGames(): GameInfo[] {

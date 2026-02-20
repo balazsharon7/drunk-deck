@@ -11,6 +11,8 @@ import { PartyLobby } from "@/components/party-lobby";
 import { KingsCup } from "@/components/games/kings-cup";
 import { KingsCupMultiplayer } from "@/components/games/kings-cup-multiplayer";
 import { RideTheBus } from "@/components/games/ride-the-bus";
+import { RideTheBusMultiplayer } from "@/components/games/ride-the-bus-multiplayer";
+import { TabooMultiplayer } from "@/components/games/taboo-multiplayer";
 import { Blackjack } from "@/components/games/blackjack";
 import { Charades } from "@/components/games/charades";
 import { Taboo } from "@/components/games/taboo";
@@ -30,7 +32,7 @@ type AppView =
   | "game";
 
 function GameRouter() {
-  const { currentGame, setCurrentGame, setPlayers, language, setLanguage } =
+  const { currentGame, setCurrentGame, language, setLanguage } =
     useGame();
   const [view, setView] = useState<AppView>("welcome");
   const [user, setUser] = useState<User | null>(null);
@@ -63,6 +65,11 @@ function GameRouter() {
 
         if (profile?.username) {
           setUsername(profile.username);
+        } else if (user.email) {
+          setUsername(user.email.split("@")[0]);
+        } else {
+          // Anonymous user without profile yet
+          setUsername("Vendeg");
         }
         if (profile?.language) {
           setLanguage(profile.language as "hu" | "en");
@@ -123,17 +130,9 @@ function GameRouter() {
   };
 
   const handleGoOnline = () => {
-    console.log(
-      "[v0] handleGoOnline called, user:",
-      !!user,
-      "isOnlineMode:",
-      isOnlineMode,
-    );
     if (user) {
-      console.log("[v0] Navigating to party view");
       setView("party");
     } else {
-      console.log("[v0] No user, navigating to auth");
       setView("auth");
     }
   };
@@ -184,9 +183,7 @@ function GameRouter() {
       name: m.profiles?.username || `Jatekos ${index + 1}`,
       avatar: ["🎮", "🎲", "🃏", "🍺", "🎯", "🎪", "🎭", "🎨"][index % 8],
       isHost: index === 0,
-      sips: 0,
     }));
-    setPlayers(partyPlayers);
     setPartyMembers(partyPlayers);
 
     setView("game");
@@ -229,6 +226,20 @@ function GameRouter() {
     return (
       <AuthForm
         onSuccess={handleAuthSuccess}
+        onGuestSuccess={async () => {
+          const { data: { user: freshUser } } = await supabase.auth.getUser();
+          if (freshUser) {
+            setUser(freshUser);
+            const { data: profile } = await supabase
+              .from("profiles")
+              .select("username")
+              .eq("id", freshUser.id)
+              .single();
+            if (profile?.username) setUsername(profile.username);
+          }
+          setIsOnlineMode(true);
+          setView("party");
+        }}
         onBack={handleAuthBack}
         language={language}
       />
@@ -249,7 +260,6 @@ function GameRouter() {
   }
 
   // Party lobby view
-  console.log("[v0] Current view:", view, "user:", !!user);
   if (view === "party" && user) {
     return (
       <PartyLobby
@@ -278,6 +288,32 @@ function GameRouter() {
     if (currentGame === "kings-cup" && isOnlineGame && partyId && user) {
       return (
         <KingsCupMultiplayer
+          partyId={partyId}
+          playerId={user.id}
+          playerName={username || user.email?.split("@")[0] || "Jatekos"}
+          isHost={partyMembers[0]?.id === user.id}
+          initialPlayers={partyMembers}
+          onBack={handleBack}
+        />
+      );
+    }
+    // Multiplayer Ride the Bus
+    if (currentGame === "ride-the-bus" && isOnlineGame && partyId && user) {
+      return (
+        <RideTheBusMultiplayer
+          partyId={partyId}
+          playerId={user.id}
+          playerName={username || user.email?.split("@")[0] || "Jatekos"}
+          isHost={partyMembers[0]?.id === user.id}
+          initialPlayers={partyMembers}
+          onBack={handleBack}
+        />
+      );
+    }
+    // Multiplayer Taboo (Barlangnyelv)
+    if (currentGame === "taboo" && isOnlineGame && partyId && user) {
+      return (
+        <TabooMultiplayer
           partyId={partyId}
           playerId={user.id}
           playerName={username || user.email?.split("@")[0] || "Jatekos"}

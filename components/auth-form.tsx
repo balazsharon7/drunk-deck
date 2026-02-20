@@ -12,15 +12,18 @@ import { motion, AnimatePresence } from "framer-motion";
 interface AuthFormProps {
   onSuccess: () => void;
   onBack: () => void;
+  onGuestSuccess?: () => void;
   language: Language;
 }
 
-export function AuthForm({ onSuccess, onBack, language }: AuthFormProps) {
+export function AuthForm({ onSuccess, onBack, onGuestSuccess, language }: AuthFormProps) {
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [username, setUsername] = useState("");
+  const [guestName, setGuestName] = useState("");
   const [loading, setLoading] = useState(false);
+  const [guestLoading, setGuestLoading] = useState(false);
   const [error, setError] = useState("");
   const [step, setStep] = useState<"email" | "verify">("email");
 
@@ -104,6 +107,37 @@ export function AuthForm({ onSuccess, onBack, language }: AuthFormProps) {
       setError(errorMsg);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleGuestSignIn = async () => {
+    if (!guestName.trim()) {
+      setError(language === "hu" ? "Add meg a neved!" : "Enter your name!");
+      return;
+    }
+    setGuestLoading(true);
+    setError("");
+    try {
+      const { data, error: anonError } = await supabase.auth.signInAnonymously();
+      if (anonError) throw anonError;
+
+      if (data.user) {
+        await supabase.from("profiles").upsert(
+          {
+            id: data.user.id,
+            username: guestName.trim(),
+            language,
+          },
+          { onConflict: "id", ignoreDuplicates: false },
+        );
+        (onGuestSuccess || onSuccess)();
+      }
+    } catch (err: any) {
+      setError(
+        err.message || (language === "hu" ? "Hiba tortent" : "An error occurred"),
+      );
+    } finally {
+      setGuestLoading(false);
     }
   };
 
@@ -438,14 +472,77 @@ export function AuthForm({ onSuccess, onBack, language }: AuthFormProps) {
               >
                 {isSignUp
                   ? language === "hu"
-                    ? "Van már fiókod? Jelentkezz be"
+                    ? "Van mar fiokod? Jelentkezz be"
                     : "Have an account? Sign in"
                   : language === "hu"
-                    ? "Nincs még fiókod? Regisztrálj"
+                    ? "Nincs meg fiokod? Regisztralj"
                     : "Don't have an account? Sign up"}
               </button>
             </div>
           </motion.form>
+
+          {/* Guest mode section */}
+          <motion.div
+            className="w-full mt-4 p-5 rounded-2xl"
+            style={{
+              background: "rgba(15,6,0,0.50)",
+              border: "1px solid rgba(255,185,0,0.15)",
+              backdropFilter: "blur(16px)",
+            }}
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.35, duration: 0.5 }}
+          >
+            {/* Divider */}
+            <div className="flex items-center gap-3 mb-4">
+              <div className="flex-1 h-px" style={{ background: "linear-gradient(90deg, transparent, rgba(255,185,0,0.3))" }} />
+              <span className="text-[10px] font-black tracking-[0.3em]" style={{ fontFamily: "'Cinzel', serif", color: "rgba(255,185,0,0.45)" }}>
+                {language === "hu" ? "VAGY" : "OR"}
+              </span>
+              <div className="flex-1 h-px" style={{ background: "linear-gradient(270deg, transparent, rgba(255,185,0,0.3))" }} />
+            </div>
+
+            <p className="text-[10px] font-black tracking-[0.35em] mb-3" style={{ fontFamily: "'Cinzel', serif", color: "rgba(255,185,0,0.5)" }}>
+              {language === "hu" ? "FOLYTATAS VENDEGKENT" : "CONTINUE AS GUEST"}
+            </p>
+
+            <div className="flex gap-2">
+              <input
+                value={guestName}
+                onChange={(e) => setGuestName(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleGuestSignIn()}
+                maxLength={20}
+                placeholder={language === "hu" ? "A neved" : "Your name"}
+                className="flex-1 h-11 px-4 text-sm font-bold outline-none rounded-xl"
+                style={{
+                  background: "rgba(10,4,0,0.6)",
+                  border: "1px solid rgba(255,185,0,0.22)",
+                  color: "#FFE566",
+                  fontFamily: "'Cinzel', serif",
+                }}
+              />
+              <button
+                onClick={handleGuestSignIn}
+                disabled={guestLoading || !guestName.trim()}
+                className="px-5 h-11 rounded-xl font-black text-xs tracking-widest transition-all"
+                style={{
+                  fontFamily: "'Cinzel', serif",
+                  background: guestLoading ? "rgba(30,15,0,0.35)" : "rgba(255,185,0,0.12)",
+                  border: "1px solid rgba(255,185,0,0.35)",
+                  color: "#FFD700",
+                  opacity: !guestName.trim() ? 0.5 : 1,
+                  cursor: !guestName.trim() ? "not-allowed" : "pointer",
+                }}
+              >
+                {guestLoading ? "..." : language === "hu" ? "BELEPES" : "GO"}
+              </button>
+            </div>
+            <p className="text-[10px] mt-2" style={{ color: "rgba(255,185,0,0.3)", fontFamily: "'Cinzel', serif" }}>
+              {language === "hu"
+                ? "Fiok nelkul jatszol, de csatlakozhatsz partyhoz!"
+                : "Play without an account, but you can still join parties!"}
+            </p>
+          </motion.div>
         </div>
       </main>
     </div>

@@ -1,8 +1,5 @@
 'use client';
 
-// Main multiplayer hook for real-time game synchronization
-// Uses Supabase Realtime for state sync and presence
-
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import type { RealtimeChannel } from '@supabase/supabase-js';
@@ -13,7 +10,6 @@ import type {
   ConnectionStatus,
   UseMultiplayerReturn,
   GameEvent,
-  PlayerPresence
 } from './types';
 import { generateEventId } from './game-logic';
 
@@ -22,325 +18,233 @@ interface UseMultiplayerOptions {
   playerId: string;
   playerName: string;
   isHost: boolean;
-  onGameEvent?: (event: GameEvent) => void;
-  onPlayerJoin?: (player: PlayerInGame) => void;
-  onPlayerLeave?: (playerId: string) => void;
 }
 
 export function useMultiplayer<T extends GameState>(
   options: UseMultiplayerOptions
 ): UseMultiplayerReturn<T> {
-  const { partyId, playerId, playerName, isHost, onGameEvent, onPlayerJoin, onPlayerLeave } = options;
-  
+  const { partyId, playerId, playerName, isHost } = options;
+
   const [gameState, setGameState] = useState<T | null>(null);
   const [players, setPlayers] = useState<PlayerInGame[]>([]);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('connecting');
   const [error, setError] = useState<string | null>(null);
-  
-  const channelRef = useRef<RealtimeChannel | null>(null);
-  const presenceChannelRef = useRef<RealtimeChannel | null>(null);
-  const supabaseRef = useRef(createClient());
-  const pendingActionsRef = useRef<Map<string, GameAction>>(new Map());
-  
-  // Current player info
-  const currentPlayer = players.find(p => p.id === playerId) || null;
-  const isMyTurn = gameState ? gameState.players[gameState.currentPlayerIndex]?.id === playerId : false;
+  const [events, setEvents] = useState<GameEvent[]>([]);
 
-  // Initialize channels and subscriptions
+  const channelRef = useRef<RealtimeChannel | null>(null);
+  const supabaseRef = useRef(createClient());
+
+  const currentPlayer = players.find(p => p.id === playerId) || null;
+  const isMyTurn = gameState
+    ? gameState.players[gameState.currentPlayerIndex]?.id === playerId
+    : false;
+
+  // Setup realtime channel
   useEffect(() => {
     const supabase = supabaseRef.current;
-    
-    const setupChannels = async () => {
-      try {
-        // 1. Subscribe to game state changes
-        const gameChannel = supabase
-          .channel(`game:${partyId}`)
-          .on('broadcast', { event: 'state_update' }, (payload) => {
-            console.log('[v0] Received state update:', payload);
-            const newState = payload.payload as T;
-            setGameState(newState);
-          })
-          .on('broadcast', { event: 'game_event' }, (payload) => {
-            console.log('[v0] Received game event:', payload);
-            const event = payload.payload as GameEvent;
-            onGameEvent?.(event);
-          })
-          .subscribe((status) => {
-            console.log('[v0] Game channel status:', status);
-            if (status === 'SUBSCRIBED') {
-              setConnectionStatus('connected');
-            } else if (status === 'CLOSED') {
-              setConnectionStatus('disconnected');
-            }
-          });
-        
-        channelRef.current = gameChannel;
-        
-        // 2. Subscribe to presence for player tracking
-        const presenceChannel = supabase
-          .channel(`presence:${partyId}`)
-          .on('presence', { event: 'sync' }, () => {
-            const state = presenceChannel.presenceState();
-            console.log('[v0] Presence sync:', state);
-            updatePlayersFromPresence(state);
-          })
-          .on('presence', { event: 'join' }, ({ key, newPresences }) => {
-            console.log('[v0] Player joined:', key, newPresences);
-            newPresences.forEach((presence: PlayerPresence) => {
-              onPlayerJoin?.({
-                id: presence.odavaloPlayerId || presence.playerId || key,
-                name: presence.odavaloPlayerName || playerName,
-                avatar: '🎮',
-                isHost: false,
-                isOnline: true
-              });
-            });
-          })
-          .on('presence', { event: 'leave' }, ({ key, leftPresences }) => {
-            console.log('[v0] Player left:', key, leftPresences);
-            leftPresences.forEach((presence: PlayerPresence) => {
-              onPlayerLeave?.(presence.odavaloPlayerId || presence.playerId || key);
-            });
-          })
-          .subscribe(async (status) => {
-            if (status === 'SUBSCRIBED') {
-              // Track our own presence
-              await presenceChannel.track({
-                odavaloPlayerId: playerId,
-                odavaloPlayerName: playerName,
-                odavaloIsHost: isHost,
-                odavaloJoinedAt: new Date().toISOString(),
-                playerId: playerId,
-                playerName: playerName,
-                isHost: isHost,
-                joinedAt: new Date().toISOString()
-              });
-            }
-          });
-        
-        presenceChannelRef.current = presenceChannel;
-        
-        // 3. Load initial game state from database
-        await loadInitialState();
-        
-      } catch (err) {
-        console.error('[v0] Error setting up channels:', err);
-        setError(err instanceof Error ? err.message : 'Failed to connect');
-        setConnectionStatus('error');
+
+    // Single channel for both broadcast + presence
+    const channel = supabase.channel(`party:${partyId}`, {
+      config: { presence: { key: playerId } },
+    });
+
+    // Listen for state updates
+    channel.on('broadcast', { event: 'state_update' }, ({ payload }) => {
+      if (payload) {
+        setGameState(payload as T);
+        if (payload.players) {
+          setPlayers(payload.players);
+        }
       }
-    };
-    
-    setupChannels();
-    
-    // Cleanup on unmount
+    });
+
+    // Listen for game events (chat, notifications)
+    channel.on('broadcast', { event: 'game_event' }, ({ payload }) => {
+      if (payload) {
+        const evt = payload as GameEvent;
+        setEvents(prev => [...prev.slice(-49), evt]); // keep last 50
+      }
+    });
+
+    // Presence sync
+    channel.on('presence', { event: 'sync' }, () => {
+      const state = channel.presenceState();
+      const onlinePlayers: PlayerInGame[] = [];
+
+      Object.values(state).forEach((presences) => {
+        (presences as Record<string, unknown>[]).forEach((p) => {
+          onlinePlayers.push({
+            id: p.playerId as string,
+            name: p.playerName as string,
+            avatar: (p.avatar as string) || '',
+            isHost: (p.isHost as boolean) || false,
+            isOnline: true,
+            isReady: (p.isReady as boolean) || false,
+            userId: p.userId as string | undefined,
+          });
+        });
+      });
+
+      setPlayers(onlinePlayers);
+    });
+
+    channel.subscribe(async (status) => {
+      if (status === 'SUBSCRIBED') {
+        setConnectionStatus('connected');
+        // Track our presence
+        await channel.track({
+          playerId,
+          playerName,
+          isHost,
+          avatar: '',
+          isReady: false,
+          joinedAt: new Date().toISOString(),
+        });
+      } else if (status === 'CHANNEL_ERROR') {
+        setConnectionStatus('error');
+      } else if (status === 'CLOSED') {
+        setConnectionStatus('disconnected');
+      }
+    });
+
+    channelRef.current = channel;
+
+    // Load initial game state from DB if it exists
+    supabase
+      .from('game_states')
+      .select('state')
+      .eq('party_id', partyId)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data?.state) {
+          setGameState(data.state as T);
+          if ((data.state as T).players) {
+            setPlayers((data.state as T).players);
+          }
+        }
+      });
+
     return () => {
-      channelRef.current?.unsubscribe();
-      presenceChannelRef.current?.unsubscribe();
+      channel.unsubscribe();
     };
   }, [partyId, playerId, playerName, isHost]);
 
-  // Load initial state from database
-  const loadInitialState = async () => {
-    const supabase = supabaseRef.current;
-    
-    try {
-      const { data, error } = await supabase
-        .from('game_states')
-        .select('*')
-        .eq('party_id', partyId)
-        .single();
-      
-      if (error && error.code !== 'PGRST116') { // PGRST116 = no rows
-        throw error;
-      }
-      
-      if (data) {
-        setGameState(data.state as T);
-        setPlayers(data.state.players || []);
-      }
-    } catch (err) {
-      console.error('[v0] Error loading initial state:', err);
-      // Don't set error - game might not have started yet
+  // Update readiness in presence
+  const setReady = useCallback(async (ready: boolean) => {
+    if (channelRef.current) {
+      await channelRef.current.track({
+        playerId,
+        playerName,
+        isHost,
+        avatar: '',
+        isReady: ready,
+        joinedAt: new Date().toISOString(),
+      });
     }
-  };
+  }, [playerId, playerName, isHost]);
 
-  // Update players list from presence state
-  const updatePlayersFromPresence = (presenceState: Record<string, PlayerPresence[]>) => {
-    const onlinePlayers: PlayerInGame[] = [];
-    
-    Object.values(presenceState).forEach((presences) => {
-      presences.forEach((presence) => {
-        onlinePlayers.push({
-          id: presence.odavaloPlayerId || presence.playerId || '',
-          name: presence.odavaloPlayerName || '',
-          avatar: '🎮',
-          isHost: presence.odavaloIsHost || false,
-          isOnline: true
-        });
-      });
-    });
-    
-    // Merge with existing players (keep offline players too)
-    setPlayers(currentPlayers => {
-      const merged = [...currentPlayers];
-      
-      onlinePlayers.forEach(onlinePlayer => {
-        const existingIndex = merged.findIndex(p => p.id === onlinePlayer.id);
-        if (existingIndex >= 0) {
-          merged[existingIndex] = { ...merged[existingIndex], isOnline: true };
-        } else {
-          merged.push(onlinePlayer);
-        }
-      });
-      
-      // Mark players not in presence as offline
-      merged.forEach(player => {
-        if (!onlinePlayers.find(p => p.id === player.id)) {
-          player.isOnline = false;
-        }
-      });
-      
-      return merged;
-    });
-  };
-
-  // Dispatch a game action (optimistic update + server validation)
+  // Dispatch game action to server, then broadcast result
   const dispatch = useCallback(async (action: GameAction) => {
-    const actionId = generateEventId();
-    
     try {
-      // Add to pending actions for rollback if needed
-      pendingActionsRef.current.set(actionId, action);
-      
-      // Send action to server for validation
+      setError(null);
       const response = await fetch('/api/game/action', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          partyId,
-          action,
-          actionId,
-          playerId
-        })
+        body: JSON.stringify({ partyId, action, playerId }),
       });
-      
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Action failed');
-      }
-      
+
       const result = await response.json();
-      
-      // Remove from pending
-      pendingActionsRef.current.delete(actionId);
-      
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Action failed');
+      }
+
       // Broadcast the new state to all players
       if (result.newState && channelRef.current) {
+        setGameState(result.newState as T);
         await channelRef.current.send({
           type: 'broadcast',
           event: 'state_update',
-          payload: result.newState
+          payload: result.newState,
         });
       }
-      
     } catch (err) {
-      console.error('[v0] Action dispatch error:', err);
-      pendingActionsRef.current.delete(actionId);
-      setError(err instanceof Error ? err.message : 'Action failed');
-      
-      // Reload state to recover from optimistic update
-      await loadInitialState();
+      const msg = err instanceof Error ? err.message : 'Action failed';
+      setError(msg);
     }
   }, [partyId, playerId]);
 
-  // Send a chat message
+  // Send chat message via broadcast
   const sendChatMessage = useCallback((message: string) => {
     if (!channelRef.current) return;
-    
+
+    const evt: GameEvent = {
+      id: generateEventId(),
+      partyId,
+      eventType: 'chat_message',
+      playerId,
+      playerName,
+      payload: { message },
+      timestamp: new Date().toISOString(),
+    };
+
     channelRef.current.send({
       type: 'broadcast',
       event: 'game_event',
-      payload: {
-        id: generateEventId(),
-        partyId,
-        eventType: 'chat_message',
-        playerId,
-        payload: { message, playerName },
-        timestamp: new Date().toISOString(),
-        sequence: Date.now()
-      }
+      payload: evt,
     });
+
+    // Add locally too
+    setEvents(prev => [...prev.slice(-49), evt]);
   }, [partyId, playerId, playerName]);
 
-  // Start the game (host only)
+  // Start game (host only)
   const startGame = useCallback(async () => {
     if (!isHost) {
-      setError('Only host can start the game');
+      setError('Only the host can start the game');
       return;
     }
-    
+
     try {
+      setError(null);
       const response = await fetch('/api/game/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          partyId,
-          playerId,
-          players
-        })
+        body: JSON.stringify({ partyId, playerId, players }),
       });
-      
+
+      const result = await response.json();
+
       if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to start game');
+        throw new Error(result.error || 'Failed to start');
       }
-      
-      const { gameState: newState } = await response.json();
+
+      const newState = result.gameState as T;
       setGameState(newState);
-      
-      // Broadcast start to all players
+
+      // Broadcast to all players
       if (channelRef.current) {
         await channelRef.current.send({
           type: 'broadcast',
           event: 'state_update',
-          payload: newState
-        });
-        
-        await channelRef.current.send({
-          type: 'broadcast',
-          event: 'game_event',
-          payload: {
-            id: generateEventId(),
-            partyId,
-            eventType: 'game_started',
-            playerId,
-            payload: {},
-            timestamp: new Date().toISOString(),
-            sequence: Date.now()
-          }
+          payload: newState,
         });
       }
-      
     } catch (err) {
-      console.error('[v0] Start game error:', err);
-      setError(err instanceof Error ? err.message : 'Failed to start game');
+      const msg = err instanceof Error ? err.message : 'Failed to start';
+      setError(msg);
     }
   }, [isHost, partyId, playerId, players]);
 
-  // End the game (host only)
+  // End game
   const endGame = useCallback(async () => {
     await dispatch({ type: 'END_GAME', playerId });
   }, [dispatch, playerId]);
 
-  // Leave the game
+  // Leave game
   const leaveGame = useCallback(async () => {
-    // Untrack presence
-    await presenceChannelRef.current?.untrack();
-    
-    // Unsubscribe from channels
+    await channelRef.current?.untrack();
     await channelRef.current?.unsubscribe();
-    await presenceChannelRef.current?.unsubscribe();
-    
     setConnectionStatus('disconnected');
   }, []);
 
@@ -351,31 +255,11 @@ export function useMultiplayer<T extends GameState>(
     isMyTurn,
     connectionStatus,
     error,
+    events,
     dispatch,
     sendChatMessage,
     startGame,
     endGame,
-    leaveGame
-  };
-}
-
-// Hook for local-only games (no server sync)
-export function useLocalGame<T extends GameState>(
-  initialState: T
-) {
-  const [gameState, setGameState] = useState<T>(initialState);
-  
-  const dispatch = useCallback((action: GameAction) => {
-    setGameState(current => {
-      // Apply action locally - this would use the game-logic functions
-      // For now, return current state (implement per game type)
-      return current;
-    });
-  }, []);
-  
-  return {
-    gameState,
-    setGameState,
-    dispatch
+    leaveGame,
   };
 }
