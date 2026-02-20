@@ -11,6 +11,8 @@ import { PartyLobby } from "@/components/party-lobby";
 import { KingsCup } from "@/components/games/kings-cup";
 import { KingsCupMultiplayer } from "@/components/games/kings-cup-multiplayer";
 import { RideTheBus } from "@/components/games/ride-the-bus";
+import { RideTheBusMultiplayer } from "@/components/games/ride-the-bus-multiplayer";
+import { TabooMultiplayer } from "@/components/games/taboo-multiplayer";
 import { Blackjack } from "@/components/games/blackjack";
 import { Charades } from "@/components/games/charades";
 import { Taboo } from "@/components/games/taboo";
@@ -286,6 +288,32 @@ function GameRouter() {
     if (currentGame === "kings-cup" && isOnlineGame && partyId && user) {
       return (
         <KingsCupMultiplayer
+          partyId={partyId}
+          playerId={user.id}
+          playerName={username || user.email?.split("@")[0] || "Jatekos"}
+          isHost={partyMembers[0]?.id === user.id}
+          initialPlayers={partyMembers}
+          onBack={handleBack}
+        />
+      );
+    }
+    // Multiplayer Ride the Bus
+    if (currentGame === "ride-the-bus" && isOnlineGame && partyId && user) {
+      return (
+        <RideTheBusMultiplayer
+          partyId={partyId}
+          playerId={user.id}
+          playerName={username || user.email?.split("@")[0] || "Jatekos"}
+          isHost={partyMembers[0]?.id === user.id}
+          initialPlayers={partyMembers}
+          onBack={handleBack}
+        />
+      );
+    }
+    // Multiplayer Taboo (Barlangnyelv)
+    if (currentGame === "taboo" && isOnlineGame && partyId && user) {
+      return (
+        <TabooMultiplayer
           partyId={partyId}
           playerId={user.id}
           playerName={username || user.email?.split("@")[0] || "Jatekos"}

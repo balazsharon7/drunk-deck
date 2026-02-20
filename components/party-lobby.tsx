@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useGame } from "@/lib/game-context";
 import { createClient } from "@/lib/supabase/client";
-import { GAMES, GameInfo } from "@/lib/game-catalog";
+import { GAMES, GameInfo, getMultiplayerGames } from "@/lib/game-catalog";
 import type { GameType } from "@/lib/game-types";
 import {
   ArrowLeft,
@@ -748,7 +748,7 @@ export function PartyLobby({
                 }}
               />
               <div className="space-y-2">
-                {GAMES.map((g) => {
+                {getMultiplayerGames().map((g) => {
                   const sel = selectedGameId === g.id;
                   return (
                     <button
@@ -1052,7 +1052,7 @@ export function PartyLobby({
               className="flex gap-2 overflow-x-auto pb-1"
               style={{ scrollbarWidth: "none" }}
             >
-              {GAMES.map((g) => {
+              {getMultiplayerGames().map((g) => {
                 const active = currentParty.game_type === g.id;
                 return (
                   <button
