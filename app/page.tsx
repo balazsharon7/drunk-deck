@@ -174,6 +174,11 @@ function GameRouter() {
     partyIdParam: string,
     members: { user_id: string; profiles: { username: string } }[],
   ) => {
+    console.log("[v0] handlePartyStartGame called:", { gameType, partyIdParam, membersCount: members?.length, members });
+    if (!gameType || !partyIdParam || !members?.length) {
+      console.log("[v0] handlePartyStartGame ABORTED - missing data");
+      return;
+    }
     setCurrentGame(gameType);
     setIsOnlineGame(true);
     setPartyId(partyIdParam);
@@ -184,8 +189,10 @@ function GameRouter() {
       avatar: ["🎮", "🎲", "🃏", "🍺", "🎯", "🎪", "🎭", "🎨"][index % 8],
       isHost: index === 0,
     }));
+    console.log("[v0] Setting partyPlayers:", partyPlayers);
     setPartyMembers(partyPlayers);
 
+    console.log("[v0] Setting view to game");
     setView("game");
   };
 
@@ -283,6 +290,7 @@ function GameRouter() {
   }
 
   // Game views
+  console.log("[v0] Render check:", { view, currentGame, isOnlineGame, partyId, userId: user?.id, partyMembersCount: partyMembers.length });
   if (view === "game" && currentGame) {
     // Multiplayer Kings Cup
     if (currentGame === "kings-cup" && isOnlineGame && partyId && user) {

@@ -525,18 +525,22 @@ export function PartyLobby({
   };
 
   const handleStartGame = async () => {
-    if (!currentParty || !canStart) return;
-    console.log("[v0] Host starting game, members:", members.length);
+    console.log("[v0] handleStartGame called, canStart:", canStart, "currentParty:", currentParty?.id, "game_type:", currentParty?.game_type, "members:", members.length);
+    if (!currentParty || !canStart) {
+      console.log("[v0] handleStartGame BLOCKED - currentParty:", !!currentParty, "canStart:", canStart, "isHost:", isHost, "members.length:", members.length, "allReady:", allReady);
+      return;
+    }
     const { error: updateError } = await supabase
       .from("parties")
       .update({ status: "playing" })
       .eq("id", currentParty.id);
 
     if (updateError) {
-      console.log("[v0] Error starting game:", updateError.message);
+      console.log("[v0] Error updating party status:", updateError.message);
       return;
     }
 
+    console.log("[v0] Party status updated, calling onStartGame with:", currentParty.game_type, currentParty.id, members.length, "members");
     // Host triggers directly - don't wait for realtime event
     onStartGame(currentParty.game_type as GameType, currentParty.id, members);
   };
