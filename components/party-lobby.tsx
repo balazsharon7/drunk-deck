@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useGame } from "@/lib/game-context";
 import { createClient } from "@/lib/supabase/client";
 import { GAMES, GameInfo, getMultiplayerGames } from "@/lib/game-catalog";
@@ -362,6 +362,10 @@ export function PartyLobby({
   );
   const canStart = isHost && members.length >= 2 && allReady;
 
+  // Keep a ref to members so the channel listener always has the latest value
+  const membersRef = useRef(members);
+  membersRef.current = members;
+
   const loadMembers = useCallback(async () => {
     if (!currentParty) return;
     const { data } = await supabase
@@ -373,6 +377,10 @@ export function PartyLobby({
 
   useEffect(() => {
     if (!currentParty) return;
+
+    // Initial load
+    loadMembers();
+
     const channel = supabase
       .channel(`party:${currentParty.id}`)
       .on(
@@ -396,16 +404,19 @@ export function PartyLobby({
         (payload) => {
           const updated = payload.new as Party;
           setCurrentParty(updated);
-          if (updated.status === "playing")
-            onStartGame(updated.game_type as GameType, updated.id, members);
+          if (updated.status === "playing") {
+            console.log("[v0] Party status -> playing, starting game with members:", membersRef.current.length);
+            onStartGame(updated.game_type as GameType, updated.id, membersRef.current);
+          }
         },
       )
       .subscribe();
-    loadMembers();
+
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [currentParty, supabase, onStartGame, members, loadMembers]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentParty?.id]);
 
   const handleCreateParty = async () => {
     if (!partyName.trim()) {
@@ -515,10 +526,19 @@ export function PartyLobby({
 
   const handleStartGame = async () => {
     if (!currentParty || !canStart) return;
-    await supabase
+    console.log("[v0] Host starting game, members:", members.length);
+    const { error: updateError } = await supabase
       .from("parties")
       .update({ status: "playing" })
       .eq("id", currentParty.id);
+
+    if (updateError) {
+      console.log("[v0] Error starting game:", updateError.message);
+      return;
+    }
+
+    // Host triggers directly - don't wait for realtime event
+    onStartGame(currentParty.game_type as GameType, currentParty.id, members);
   };
 
   const handleLeaveParty = async () => {
