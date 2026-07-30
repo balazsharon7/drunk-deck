@@ -1,3 +1,10 @@
+> **⚠️ Archived — 2026-07-30.**
+> A Drunk Deck fejlesztése egyetlen repóban folytatódik:
+> **[balazsharon7/drunk-deck-mobile](https://github.com/balazsharon7/drunk-deck-mobile)** (Expo / React Native, App Store-út).
+> Ez a Next.js-es webes verzió referenciaként marad meg — a benne lévő játékok
+> (charades, taboo, rating-game) magyar szó- és kérdéslistái már át vannak mentve a
+> mobil repo `lib/content/` mappájába. Ide ne pusholj újat.
+
 # Party drinking card game
 
 *Automatically synced with your [v0.app](https://v0.app) deployments*
